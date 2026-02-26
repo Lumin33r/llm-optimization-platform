@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-config
+  namespace: platform
+data:
+  LOG_LEVEL: "INFO"
+  AWS_REGION: "us-west-2"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability.svc.cluster.local:4317"
+  OTEL_SERVICE_NAME: "gateway"
+
+  # Team service endpoints (K8s DNS)
+  QUANT_SERVICE_URL: "http://quant-api.quant.svc.cluster.local"
+  FINETUNE_SERVICE_URL: "http://finetune-api.finetune.svc.cluster.local"
+  EVAL_SERVICE_URL: "http://eval-api.eval.svc.cluster.local"
+
+  # Routing configuration (JSON)
+  ROUTE_TABLE: |
+    {
+      "quant": {
+        "url": "http://quant-api.quant.svc.cluster.local",
+        "timeout_ms": 30000
+      },
+      "finetune": {
+        "url": "http://finetune-api.finetune.svc.cluster.local",
+        "timeout_ms": 60000,
+        "ab_variants": {
+          "lora-v1": {"weight": 80},
+          "lora-v2": {"weight": 20}
+        }
+      },
+      "eval": {
+        "url": "http://eval-api.eval.svc.cluster.local",
+        "timeout_ms": 45000
+      }
+    }

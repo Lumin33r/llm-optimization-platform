@@ -1,0 +1,32 @@
+{
+    "TableDescription": {
+        "AttributeDefinitions": [
+            {
+                "AttributeName": "LockID",
+                "AttributeType": "S"
+            }
+        ],
+        "TableName": "tf-locks-llmplatform-dev",
+        "KeySchema": [
+            {
+                "AttributeName": "LockID",
+                "KeyType": "HASH"
+            }
+        ],
+        "TableStatus": "CREATING",
+        "CreationDateTime": "2026-02-25T19:31:16.524000-05:00",
+        "ProvisionedThroughput": {
+            "NumberOfDecreasesToday": 0,
+            "ReadCapacityUnits": 0,
+            "WriteCapacityUnits": 0
+        },
+        "TableSizeBytes": 0,
+        "ItemCount": 0,
+        "TableArn": "arn:aws:dynamodb:us-west-2:388691194728:table/tf-locks-llmplatform-dev",
+        "TableId": "f7be4f3b-d8d9-4486-8fbf-a466956c007f",
+        "BillingModeSummary": {
+            "BillingMode": "PAY_PER_REQUEST"
+        },
+        "DeletionProtectionEnabled": false
+    }
+}

@@ -1,0 +1,13 @@
+# domains/legal.yaml
+domain_id: legal
+team: finetune
+splits:
+  train: 0.7
+  eval_holdout: 0.2
+  canary_never_train: 0.1
+sources:
+  - path: s3://data-engine/domains/legal/contracts.jsonl
+  - path: s3://data-engine/domains/legal/clauses.jsonl
+metadata:
+  jurisdiction: ["US", "UK", "EU"]
+  document_type: ["contract", "brief", "statute"]

@@ -1,0 +1,34 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - patches/ingress-dev.yaml
+
+labels:
+  - pairs:
+      environment: dev
+
+# Image tags for dev
+images:
+  - name: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/gateway
+    newTag: dev-latest
+  - name: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/quant-api
+    newTag: dev-latest
+  - name: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/finetune-api
+    newTag: dev-latest
+  - name: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/eval-api
+    newTag: dev-latest
+
+# Dev-specific patches
+patches:
+  - path: patches/gateway-replicas.yaml
+  - path: patches/resource-limits.yaml
+  - patch: |
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: gateway-config
+        namespace: platform
+      data:
+        LOG_LEVEL: "DEBUG"

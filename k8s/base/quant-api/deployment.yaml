@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quant-api
+  namespace: quant
+  labels:
+    app: quant-api
+    team: quantization
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: quant-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: quant-api
+        team: quantization
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: quant-sa
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: quant-api
+          image: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/quant-api:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+
+          envFrom:
+            - configMapRef:
+                name: quant-config
+
+          # Full probe pattern
+          startupProbe:
+            httpGet:
+              path: /startup
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 36 # Allow up to 3 minutes for model loading
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            periodSeconds: 15
+            failureThreshold: 3
+            timeoutSeconds: 5
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            periodSeconds: 5
+            failureThreshold: 3
+            timeoutSeconds: 3
+
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+
+          securityContext:
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false

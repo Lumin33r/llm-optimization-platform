@@ -1,0 +1,8 @@
+# Dev: reduce gateway to 1 replica
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: platform
+spec:
+  replicas: 1

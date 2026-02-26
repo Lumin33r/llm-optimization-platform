@@ -1,0 +1,43 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # Namespaces (6 total)
+  - namespace-platform.yaml
+  - namespace-quant.yaml
+  - namespace-finetune.yaml
+  - namespace-eval.yaml
+  - namespace-observability.yaml
+  - namespace-llm-baseline.yaml # vLLM baseline model (design-10)
+
+  # Gateway
+  - gateway/deployment.yaml
+  - gateway/service.yaml
+  - gateway/serviceaccount.yaml
+  - gateway/configmap.yaml
+
+  # Team services
+  - quant-api/deployment.yaml
+  - quant-api/service.yaml
+  - quant-api/serviceaccount.yaml
+  - quant-api/configmap.yaml
+
+  - finetune-api/deployment.yaml
+  - finetune-api/service.yaml
+  - finetune-api/serviceaccount.yaml
+  - finetune-api/configmap.yaml
+
+  - eval-api/deployment.yaml
+  - eval-api/service.yaml
+  - eval-api/serviceaccount.yaml
+  - eval-api/configmap.yaml
+
+  # Baseline model (see design-10-models.md)
+  - llm-baseline/deployment.yaml
+  - llm-baseline/service.yaml
+  - llm-baseline/pvc.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: kustomize
+      app.kubernetes.io/part-of: llm-optimization-platform

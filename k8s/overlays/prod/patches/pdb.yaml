@@ -1,0 +1,21 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gateway-pdb
+  namespace: platform
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: gateway
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: quant-api-pdb
+  namespace: quant
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: quant-api

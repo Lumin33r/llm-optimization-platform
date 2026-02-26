@@ -1,0 +1,23 @@
+# Controlled Failure Scenario: Tight ResourceQuota
+# Deploy this to test quota enforcement when deployment exceeds limits.
+#
+# Test:
+#   kubectl apply -f k8s/quant/resourcequota-tight.yaml
+#   kubectl apply -f k8s/quant/deployment-exceeds-quota.yaml
+#   kubectl get events -n quant --field-selector reason=FailedCreate
+#
+# Expected Grafana Observations:
+#   - Pods stuck in Pending
+#   - Quota Usage at 100% for CPU
+#   - No traffic shift to new deployment
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: tight-quota
+  namespace: quant
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    limits.cpu: "4"
+    limits.memory: 8Gi

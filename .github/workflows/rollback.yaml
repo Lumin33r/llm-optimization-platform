@@ -1,0 +1,89 @@
+# .github/workflows/rollback.yaml
+name: Rollback Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to rollback"
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      service:
+        description: "Service to rollback"
+        required: true
+        type: choice
+        options:
+          - gateway
+          - quant-api
+          - finetune-api
+          - eval-api
+          - all
+      revision:
+        description: "Revision number (blank for previous)"
+        required: false
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-west-2
+  PROJECT: llmplatform
+
+jobs:
+  rollback:
+    name: Rollback ${{ inputs.service }} in ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ env.PROJECT }}-github-actions
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ env.PROJECT }}-${{ inputs.environment }} --region ${{ env.AWS_REGION }}
+
+      - name: Rollback deployment
+        run: |
+          SERVICES="${{ inputs.service }}"
+          REVISION="${{ inputs.revision }}"
+
+          if [ "$SERVICES" = "all" ]; then
+            SERVICES="gateway quant-api finetune-api eval-api"
+          fi
+
+          for SERVICE in $SERVICES; do
+            case $SERVICE in
+              gateway) NAMESPACE="platform" ;;
+              quant-api) NAMESPACE="quant" ;;
+              finetune-api) NAMESPACE="finetune" ;;
+              eval-api) NAMESPACE="eval" ;;
+            esac
+
+            echo "Rolling back $SERVICE in namespace $NAMESPACE"
+
+            if [ -n "$REVISION" ]; then
+              kubectl rollout undo deployment/$SERVICE -n $NAMESPACE --to-revision=$REVISION
+            else
+              kubectl rollout undo deployment/$SERVICE -n $NAMESPACE
+            fi
+
+            kubectl rollout status deployment/$SERVICE -n $NAMESPACE --timeout=300s
+          done
+
+      - name: Verify rollback
+        run: |
+          echo "=== Current Pod Status ==="
+          kubectl get pods -A -l app.kubernetes.io/part-of=llm-optimization-platform
+
+          echo "=== Deployment Images ==="
+          kubectl get deployments -A -l app.kubernetes.io/part-of=llm-optimization-platform -o jsonpath='{range .items[*]}{.metadata.name}: {.spec.template.spec.containers[0].image}{"\n"}{end}'

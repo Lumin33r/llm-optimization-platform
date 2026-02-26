@@ -1,0 +1,40 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - patches/hpa.yaml
+  - patches/pdb.yaml
+
+commonLabels:
+  environment: prod
+
+replicas:
+  - name: gateway
+    count: 4
+  - name: quant-api
+    count: 3
+  - name: finetune-api
+    count: 3
+  - name: eval-api
+    count: 3
+
+images:
+  - name: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/llmplatform-prod/gateway
+    newTag: v1.0.0
+  - name: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/llmplatform-prod/quant-api
+    newTag: v1.0.0
+  - name: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/llmplatform-prod/finetune-api
+    newTag: v1.0.0
+  - name: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/llmplatform-prod/eval-api
+    newTag: v1.0.0
+
+patches:
+  - path: patches/gateway-replicas.yaml
+  - path: patches/resource-limits.yaml
+
+configMapGenerator:
+  - name: gateway-config
+    behavior: merge
+    literals:
+      - LOG_LEVEL=INFO

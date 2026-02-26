@@ -1,0 +1,34 @@
+# Controlled Failure Scenario: Deployment Exceeds Quota
+# This deployment requests more resources than the tight quota allows.
+#
+# Test:
+#   kubectl apply -f k8s/quant/resourcequota-tight.yaml
+#   kubectl apply -f k8s/quant/deployment-exceeds-quota.yaml
+#   kubectl describe resourcequota tight-quota -n quant
+#
+# Expected Grafana Observations:
+#   - Pods stuck in Pending
+#   - Rollout shows 0/3 available
+#   - Quota Usage at 100% for CPU
+#   - No traffic shift to new deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quant-api-big
+  namespace: quant
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: quant-api-big
+  template:
+    metadata:
+      labels:
+        app: quant-api-big
+    spec:
+      containers:
+        - name: quant-api
+          resources:
+            requests:
+              cpu: "2" # 3 replicas x 2 = 6 CPU (exceeds 2)
+              memory: 4Gi

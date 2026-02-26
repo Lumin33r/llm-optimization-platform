@@ -1,0 +1,96 @@
+# .github/workflows/post-deploy-smoke.yaml
+name: Post-Deploy Smoke Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to test"
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+  workflow_call:
+    inputs:
+      environment:
+        description: "Environment to test"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-west-2
+  PROJECT: llmplatform
+
+jobs:
+  smoke-test:
+    name: Smoke Test (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ env.PROJECT }}-github-actions
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ env.PROJECT }}-${{ inputs.environment }} --region ${{ env.AWS_REGION }}
+
+      - name: Smoke test baseline model
+        run: |
+          # Wait for rollout
+          kubectl -n llm-baseline rollout status deploy/mistral-7b-instruct-vllm --timeout=10m
+
+          # Port-forward and test
+          kubectl -n llm-baseline port-forward svc/mistral-7b-baseline 8000:8000 &
+          sleep 5
+
+          # Check model list
+          curl -sf http://localhost:8000/v1/models | jq -e '.data[0].id'
+
+          # Test inference
+          RESPONSE=$(curl -sf http://localhost:8000/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -d '{
+              "model": "mistralai/Mistral-7B-Instruct-v0.2",
+              "messages": [{"role": "user", "content": "Say hello"}],
+              "max_tokens": 10
+            }')
+
+          # Assert response has choices
+          echo "$RESPONSE" | jq -e '.choices[0].message.content'
+
+      - name: Smoke test platform services
+        run: |
+          GATEWAY_URL=$(kubectl get ingress platform-ingress -n platform -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+          # Health check
+          curl -sf "http://${GATEWAY_URL}/health" || exit 1
+          echo "Platform health check passed"
+
+          # Quick prediction test
+          curl -sf -X POST "http://${GATEWAY_URL}/api/quant/predict" \
+            -H "Content-Type: application/json" \
+            -d '{"prompt": "test", "max_tokens": 5}' \
+            || echo "Warning: Prediction test failed"
+
+      - name: Report results
+        if: always()
+        run: |
+          echo "=== Pod Status ==="
+          kubectl get pods -A -l app.kubernetes.io/part-of=llm-optimization-platform
+          kubectl get pods -n llm-baseline
+
+          echo "=== Endpoints ==="
+          kubectl get endpoints -A | grep -E 'gateway|quant|finetune|eval|baseline'

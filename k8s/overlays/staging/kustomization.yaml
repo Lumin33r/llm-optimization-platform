@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+commonLabels:
+  environment: staging
+
+# Image tags for staging
+images:
+  - name: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/gateway
+    newTag: staging-latest
+  - name: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/quant-api
+    newTag: staging-latest
+  - name: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/finetune-api
+    newTag: staging-latest
+  - name: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/eval-api
+    newTag: staging-latest

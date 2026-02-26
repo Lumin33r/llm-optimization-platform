@@ -1,0 +1,8 @@
+# Prod: gateway replicas handled by HPA, set base floor
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: platform
+spec:
+  replicas: 4

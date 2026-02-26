@@ -1,0 +1,41 @@
+# Prometheus Recording Rules for LLM Optimization Platform
+# Referenced by design-03-observability.md
+groups:
+  - name: llm_platform_recording_rules
+    interval: 30s
+    rules:
+      # Request rate by service (pre-computed for dashboard efficiency)
+      - record: service:http_requests:rate5m
+        expr: sum(rate(http_server_request_count_total[5m])) by (service_name)
+
+      # Error rate by service
+      - record: service:http_error_rate:ratio5m
+        expr: |
+          sum(rate(http_server_request_count_total{http_status_code=~"5.."}[5m])) by (service_name)
+          / sum(rate(http_server_request_count_total[5m])) by (service_name)
+
+      # P95 latency by service
+      - record: service:http_latency_p95:seconds
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le, service_name)
+          )
+
+      # SageMaker invoke P95 latency by endpoint
+      - record: sagemaker:invoke_latency_p95:seconds
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(sagemaker_invoke_duration_seconds_bucket[5m])) by (le, endpoint)
+          )
+
+      # SageMaker error rate by endpoint
+      - record: sagemaker:invoke_errors:rate5m
+        expr: sum(rate(sagemaker_invoke_errors_total[5m])) by (endpoint)
+
+      # Gateway request rate by team
+      - record: gateway:requests_by_team:rate5m
+        expr: sum(rate(gateway_requests_total[5m])) by (team)
+
+      # Pod restart rate (controlled failure detection)
+      - record: k8s:pod_restarts:increase5m
+        expr: increase(kube_pod_container_status_restarts_total[5m])

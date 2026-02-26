@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eval-config
+  namespace: eval
+data:
+  LOG_LEVEL: "DEBUG"
+  AWS_REGION: "us-west-2"
+  SAGEMAKER_ENDPOINT_NAME: "eval-endpoint"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability.svc.cluster.local:4317"
+  OTEL_SERVICE_NAME: "eval-api"
+
+  # SageMaker timeout configuration
+  SAGEMAKER_TIMEOUT_MS: "45000"
+
+  # Failure handling mode
+  ENABLE_FALLBACK: "false"

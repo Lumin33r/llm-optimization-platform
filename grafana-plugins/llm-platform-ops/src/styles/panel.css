@@ -1,0 +1,73 @@
+/* LLM Platform Ops Panel Styles */
+
+.ops-panel-container {
+  padding: 16px;
+  overflow: auto;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.ops-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.ops-panel-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.ops-panel-timestamp {
+  color: #8e8e8e;
+  font-size: 12px;
+}
+
+.ops-panel-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.ops-panel-column {
+  background: #1e1e1e;
+  border-radius: 4px;
+  padding: 12px;
+}
+
+.ops-panel-full-width {
+  grid-column: 1 / -1;
+  background: #1e1e1e;
+  border-radius: 4px;
+  padding: 12px;
+}
+
+.ops-panel-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  color: #8e8e8e;
+}
+
+.ops-panel-error {
+  color: #ff5555;
+  padding: 16px;
+}
+
+/* Status indicator colors */
+.status-healthy {
+  color: #73bf69;
+}
+
+.status-degraded {
+  color: #ff9830;
+}
+
+.status-unhealthy {
+  color: #ff5555;
+}
+
+.status-unknown {
+  color: #8e8e8e;
+}

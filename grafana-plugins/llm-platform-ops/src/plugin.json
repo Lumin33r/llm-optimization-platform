@@ -1,0 +1,17 @@
+{
+  "type": "panel",
+  "name": "LLM Platform Operations",
+  "id": "llmplatform-ops-panel",
+  "info": {
+    "description": "Operations dashboard for LLM Optimization Platform",
+    "author": {
+      "name": "Platform Team"
+    },
+    "version": "1.0.0",
+    "updated": "2024-01-01"
+  },
+  "dependencies": {
+    "grafanaDependency": ">=9.0.0",
+    "plugins": []
+  }
+}

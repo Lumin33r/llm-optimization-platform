@@ -1,0 +1,136 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mistral-7b-instruct-vllm
+  namespace: llm-baseline
+  labels:
+    app: mistral-7b-instruct-vllm
+    app.kubernetes.io/part-of: llm-optimization-platform
+    app.kubernetes.io/component: baseline-inference
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # Single GPU — can't run two pods simultaneously
+  selector:
+    matchLabels:
+      app: mistral-7b-instruct-vllm
+  template:
+    metadata:
+      labels:
+        app: mistral-7b-instruct-vllm
+        lab.team: platform
+      annotations:
+        # Prometheus scraping (aligns with design-03-observability.md)
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      nodeSelector:
+        nvidia.com/gpu.present: "true"
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:v0.6.6 # Bumped from v0.4.0 — fixes tokenizer compat
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: HUGGING_FACE_HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token
+                  key: HUGGING_FACE_HUB_TOKEN
+
+            # Pod metadata for telemetry (aligns with design-08-otel-schema.md)
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_UID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+
+            # Optional: OpenTelemetry tracing (uncomment to enable)
+            # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            #   value: "http://otel-collector.observability.svc:4318"
+            # - name: OTEL_SERVICE_NAME
+            #   value: "mistral-7b-baseline"
+            # - name: OTEL_RESOURCE_ATTRIBUTES
+            #   value: "service.version=v0.4.0,deployment.environment=dev,lab.team=platform"
+
+          args:
+            - "--model"
+            - "TheBloke/Mistral-7B-Instruct-v0.2-AWQ"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8000"
+            # AWQ 4-bit quantized: ~4GB weights → plenty of room on T4 16GB
+            - "--quantization"
+            - "awq"
+            - "--max-model-len"
+            - "4096"
+            - "--max-num-seqs"
+            - "32"
+            - "--enforce-eager"
+            - "--dtype"
+            - "half"
+            - "--gpu-memory-utilization"
+            - "0.90"
+
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+              cpu: "3"
+              memory: "14Gi"
+            requests:
+              nvidia.com/gpu: "1"
+              cpu: "2"
+              memory: "12Gi"
+
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /root/.cache/huggingface
+            - name: shm
+              mountPath: /dev/shm
+
+          # Probe pattern aligned with design-02-kubernetes.md
+          startupProbe:
+            httpGet:
+              path: /v1/models
+              port: 8000
+            periodSeconds: 5
+            failureThreshold: 90 # 7.5 minutes for cold start
+            timeoutSeconds: 5
+
+          readinessProbe:
+            httpGet:
+              path: /v1/models
+              port: 8000
+            initialDelaySeconds: 0 # startupProbe gates readiness; no extra delay
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 12
+
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: 8000
+            initialDelaySeconds: 0 # startupProbe gates liveness; no extra delay
+            periodSeconds: 15
+            timeoutSeconds: 2
+            failureThreshold: 6
+
+      volumes:
+        - name: hf-cache
+          persistentVolumeClaim:
+            claimName: hf-cache
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi # Required for vLLM tensor parallelism

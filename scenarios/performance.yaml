@@ -1,0 +1,15 @@
+# scenarios/performance.yaml
+scenario_id: perf_throughput
+description: "Throughput stress test"
+prompt_templates:
+  - template: "Write a {length} summary of {topic}."
+    variables:
+      length: ["one-sentence", "paragraph", "detailed"]
+      topic: ["${domain_topics}"]
+    target_output_tokens:
+      one-sentence: 50
+      paragraph: 200
+      detailed: 800
+token_rules:
+  input_range: [50, 500]
+  output_buckets: [50, 200, 800]

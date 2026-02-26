@@ -1,0 +1,39 @@
+# Controlled Failure Scenario: Slow Startup
+# Deploys a service with startup delay, observe Gateway routing only to Ready pods.
+#
+# Test:
+#   kubectl apply -f k8s/quant/deployment-slow-startup.yaml
+#   kubectl get pods -n quant -w
+#
+# Expected Grafana Observations:
+#   - Traffic drops to 0 for slow-starting pod
+#   - No 5xx increase (traffic gated properly)
+#   - Ready Pod Count shows 1 to 2 transition after 60s
+#   - Routing Decisions shows backend_unready reason during warmup
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quant-api-slow
+  namespace: quant
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: quant-api-slow
+  template:
+    metadata:
+      labels:
+        app: quant-api-slow
+    spec:
+      containers:
+        - name: quant-api
+          env:
+            - name: STARTUP_DELAY_SECONDS
+              value: "60" # Simulate model warmup
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 12 # 60s total

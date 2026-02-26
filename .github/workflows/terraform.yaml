@@ -1,0 +1,204 @@
+# .github/workflows/terraform.yaml
+name: Terraform Infrastructure
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "infra/**"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      action:
+        description: "Terraform action"
+        required: true
+        default: "plan"
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+
+env:
+  AWS_REGION: us-west-2
+  PROJECT: llmplatform
+  TF_VERSION: 1.6.0
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ===========================================
+  # Terraform Format Check
+  # ===========================================
+  fmt:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Format
+        run: terraform fmt -check -recursive infra/
+
+  # ===========================================
+  # Terraform Plan
+  # ===========================================
+  plan:
+    name: Plan (${{ matrix.environment }})
+    needs: fmt
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        environment: [dev] # Add staging, prod as needed
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ env.PROJECT }}-github-actions
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        working-directory: infra/envs/${{ matrix.environment }}
+        run: terraform init
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: infra/envs/${{ matrix.environment }}
+        run: |
+          terraform plan -no-color -out=tfplan 2>&1 | tee plan_output.txt
+          echo "plan_exitcode=$?" >> $GITHUB_OUTPUT
+
+      - name: Upload Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ matrix.environment }}
+          path: infra/envs/${{ matrix.environment }}/tfplan
+
+      - name: Comment Plan on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('infra/envs/${{ matrix.environment }}/plan_output.txt', 'utf8');
+            const truncatedPlan = plan.length > 60000 ? plan.substring(0, 60000) + '\n...(truncated)' : plan;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### Terraform Plan - ${{ matrix.environment }}\n\n\`\`\`hcl\n${truncatedPlan}\n\`\`\``
+            });
+
+  # ===========================================
+  # Terraform Apply (main branch only)
+  # ===========================================
+  apply:
+    name: Apply (${{ matrix.environment }})
+    needs: plan
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: ${{ matrix.environment }} # Requires approval for prod
+
+    strategy:
+      matrix:
+        environment: [dev]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ env.PROJECT }}-github-actions
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Download Plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ matrix.environment }}
+          path: infra/envs/${{ matrix.environment }}
+
+      - name: Terraform Init
+        working-directory: infra/envs/${{ matrix.environment }}
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: infra/envs/${{ matrix.environment }}
+        run: terraform apply -auto-approve tfplan
+
+      - name: Output Results
+        working-directory: infra/envs/${{ matrix.environment }}
+        run: |
+          echo "=== Terraform Outputs ==="
+          terraform output -json | jq .
+
+  # ===========================================
+  # Terraform Destroy (manual only)
+  # ===========================================
+  destroy:
+    name: Destroy (${{ inputs.environment }})
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}-destroy # Extra approval
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ env.PROJECT }}-github-actions
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        working-directory: infra/envs/${{ inputs.environment }}
+        run: terraform init
+
+      - name: Terraform Destroy
+        working-directory: infra/envs/${{ inputs.environment }}
+        run: |
+          echo "::warning::DESTROYING ${{ inputs.environment }} INFRASTRUCTURE"
+          terraform destroy -auto-approve

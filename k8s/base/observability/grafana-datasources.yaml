@@ -1,0 +1,45 @@
+# k8s/base/observability/grafana-datasources.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: observability
+data:
+  datasources.yaml: |
+    apiVersion: 1
+
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        editable: false
+
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://loki:3100
+        editable: false
+        jsonData:
+          derivedFields:
+            - name: TraceID
+              matcherRegex: '"trace_id":"([^"]+)"'
+              url: '$${__value.raw}'
+              datasourceUid: tempo
+
+      - name: Tempo
+        type: tempo
+        access: proxy
+        url: http://tempo:3200
+        uid: tempo
+        editable: false
+        jsonData:
+          httpMethod: GET
+          tracesToLogs:
+            datasourceUid: loki
+            tags: ['service.name', 'k8s.pod.name']
+          serviceMap:
+            datasourceUid: prometheus
+          nodeGraph:
+            enabled: true

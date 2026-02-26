@@ -1,0 +1,73 @@
+# k8s/base/observability/otel-collector-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: observability
+  labels:
+    app: otel-collector
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.95.0
+          args: ["--config=/etc/otel/config.yaml"]
+          ports:
+            - containerPort: 4317 # OTLP gRPC
+              name: otlp-grpc
+            - containerPort: 4318 # OTLP HTTP
+              name: otlp-http
+            - containerPort: 8888 # Prometheus metrics
+              name: metrics
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otel
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: observability
+spec:
+  type: ClusterIP
+  selector:
+    app: otel-collector
+  ports:
+    - port: 4317
+      targetPort: 4317
+      name: otlp-grpc
+    - port: 4318
+      targetPort: 4318
+      name: otlp-http
+    - port: 8888
+      targetPort: 8888
+      name: metrics
