@@ -16,6 +16,26 @@ from shared.telemetry import setup_telemetry
 app = FastAPI(title="Gateway API")
 tracer, meter = setup_telemetry(app, "gateway", "platform")
 
+
+# --------------- Health endpoints ---------------
+@app.get("/startup")
+async def startup():
+    """Startup probe - returns 200 once app is alive."""
+    return {"status": "started", "service": "gateway"}
+
+
+@app.get("/health")
+async def health():
+    """Liveness probe - returns 200 if event loop is responsive."""
+    return {"status": "healthy", "service": "gateway"}
+
+
+@app.get("/ready")
+async def ready():
+    """Readiness probe - returns 200 if ready for traffic."""
+    return {"status": "ready", "service": "gateway"}
+
+
 # Initialize router from config
 ROUTE_TABLE = os.getenv("ROUTE_TABLE", "{}")
 router = Router(ROUTE_TABLE)

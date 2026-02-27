@@ -6,17 +6,17 @@ WORKDIR /app
 COPY shared/requirements.txt /app/shared/requirements.txt
 RUN pip install --no-cache-dir -r /app/shared/requirements.txt
 
-# Install quant-api dependencies
-COPY quant-api/requirements.txt /app/quant-api/requirements.txt
-RUN pip install --no-cache-dir -r /app/quant-api/requirements.txt
+# Install gateway dependencies
+COPY gateway/requirements.txt /app/gateway/requirements.txt
+RUN pip install --no-cache-dir -r /app/gateway/requirements.txt
 
 # Copy shared library
 COPY shared/ /app/shared/
 
-# Copy quant-api code
-COPY quant-api/ /app/quant-api/
+# Copy gateway code
+COPY gateway/ /app/gateway/
 
-WORKDIR /app/quant-api
+WORKDIR /app/gateway
 
 ENV PYTHONPATH=/app
 

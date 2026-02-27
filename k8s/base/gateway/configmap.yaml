@@ -10,19 +10,19 @@ data:
   OTEL_SERVICE_NAME: "gateway"
 
   # Team service endpoints (K8s DNS)
-  QUANT_SERVICE_URL: "http://quant-api.quant.svc.cluster.local"
-  FINETUNE_SERVICE_URL: "http://finetune-api.finetune.svc.cluster.local"
-  EVAL_SERVICE_URL: "http://eval-api.eval.svc.cluster.local"
+  QUANT_SERVICE_URL: "http://quant-api.quant.svc.cluster.local:8000"
+  FINETUNE_SERVICE_URL: "http://finetune-api.finetune.svc.cluster.local:8000"
+  EVAL_SERVICE_URL: "http://eval-api.eval.svc.cluster.local:8000"
 
   # Routing configuration (JSON)
   ROUTE_TABLE: |
     {
       "quant": {
-        "url": "http://quant-api.quant.svc.cluster.local",
+        "url": "http://quant-api.quant.svc.cluster.local:8000",
         "timeout_ms": 30000
       },
       "finetune": {
-        "url": "http://finetune-api.finetune.svc.cluster.local",
+        "url": "http://finetune-api.finetune.svc.cluster.local:8000",
         "timeout_ms": 60000,
         "ab_variants": {
           "lora-v1": {"weight": 80},
@@ -30,7 +30,7 @@ data:
         }
       },
       "eval": {
-        "url": "http://eval-api.eval.svc.cluster.local",
+        "url": "http://eval-api.eval.svc.cluster.local:8000",
         "timeout_ms": 45000
       }
     }

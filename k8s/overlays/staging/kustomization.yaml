@@ -9,11 +9,11 @@ commonLabels:
 
 # Image tags for staging
 images:
-  - name: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/gateway
+  - name: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/gateway
     newTag: staging-latest
-  - name: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/quant-api
+  - name: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/quant-api
     newTag: staging-latest
-  - name: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/finetune-api
+  - name: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/finetune-api
     newTag: staging-latest
-  - name: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/eval-api
+  - name: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/eval-api
     newTag: staging-latest

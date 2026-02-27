@@ -8,9 +8,9 @@ node_groups = {
   general = {
     instance_types = ["t3.medium"]
     disk_size      = 50
-    desired_size   = 2
-    min_size       = 1
-    max_size       = 4
+    desired_size   = 4
+    min_size       = 2
+    max_size       = 5
     labels = {
       "role" = "general"
     }

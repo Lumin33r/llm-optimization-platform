@@ -19,6 +19,7 @@
 - [Environment Variables Reference](#environment-variables-reference)
 - [Service URLs & Ports](#service-urls--ports)
 - [Troubleshooting](#troubleshooting)
+- [Teardown](#teardown)
 - [Design Documents](#design-documents)
 
 ---
@@ -270,6 +271,14 @@ aws eks create-addon \
   --addon-name aws-ebs-csi-driver \
   --service-account-role-arn arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/llmplatform-dev-ebs-csi-driver \
   --region us-west-2
+
+# Update addon
+aws eks update-addon \
+  --cluster-name llmplatform-dev \
+  --addon-name aws-ebs-csi-driver \
+  --service-account-role-arn "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/llmplatform-dev-ebs-csi-driver" \
+  --region us-west-2 \
+  --resolve-conflicts OVERWRITE
 ```
 
 Install the NVIDIA device plugin (required for GPU node scheduling):
@@ -307,14 +316,15 @@ kubectl apply -k base/
 
 ### 2.2 Apply dev overlay (sets ECR image tags)
 
-First, update the image references with your actual AWS account ID:
+> **Note:** The manifests ship with AWS account ID `388691194728` hardcoded in base deployments, service accounts, and overlay kustomizations. If you are deploying to a **different** AWS account, replace it first:
+>
+> ```bash
+> export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+> find k8s/ -name '*.yaml' | xargs sed -i "s/388691194728/${AWS_ACCOUNT_ID}/g"
+> ```
 
 ```bash
-export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-
-# Replace placeholder in overlay
-cd overlays/dev
-sed -i "s/ACCOUNT_ID/${AWS_ACCOUNT_ID}/g" kustomization.yaml
+cd k8s/overlays/dev
 
 # Apply overlay (patches replicas, resources, image tags)
 kubectl apply -k .
@@ -482,6 +492,9 @@ curl http://localhost:8080/metrics | head -30
 
 ### 5.1 Build and push Docker images
 
+All service Dockerfiles use `services/` as the build context so they can
+`COPY shared/` for the common library.
+
 ```bash
 export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 export ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.us-west-2.amazonaws.com"
@@ -491,32 +504,30 @@ export IMAGE_TAG=$(git rev-parse --short HEAD)
 aws ecr get-login-password --region us-west-2 | \
   docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
-# Build and push each service
-for svc in quant-api finetune-api eval-api; do
+# Build and push all four services (context = services/)
+for svc in gateway quant-api finetune-api eval-api; do
   echo "Building $svc..."
   docker build \
     -t "${ECR_REGISTRY}/llmplatform-dev/${svc}:${IMAGE_TAG}" \
     -t "${ECR_REGISTRY}/llmplatform-dev/${svc}:dev-latest" \
     -f "services/${svc}/Dockerfile" \
-    "services/${svc}/"
+    services/
 
   docker push "${ECR_REGISTRY}/llmplatform-dev/${svc}:${IMAGE_TAG}"
   docker push "${ECR_REGISTRY}/llmplatform-dev/${svc}:dev-latest"
 done
 ```
 
-> **Note:** The gateway does not have a Dockerfile. Build it the same way by creating one from the quant-api template, or deploy it differently if running locally.
+> **Important:** The build context is `services/` (not `services/<svc>/`) because each Dockerfile copies `shared/` for the common telemetry and model libraries.
 
 ### 5.2 Deploy with Kustomize dev overlay
 
 ```bash
 cd k8s/overlays/dev
-
-# Ensure ACCOUNT_ID is replaced (if not done in Phase 2)
-sed -i "s/ACCOUNT_ID/${AWS_ACCOUNT_ID}/g" kustomization.yaml
-
 kubectl apply -k .
 ```
+
+The dev overlay sets `newTag: dev-latest` for all 4 service images. Make sure your push step (5.1) tags images with `dev-latest`.
 
 ### 5.3 Verify all services
 
@@ -528,9 +539,24 @@ for svc in gateway quant-api finetune-api eval-api; do
   kubectl rollout status deployment/$svc -n $ns --timeout=120s
 done
 
-# Check all pods
+# Check all pods across namespaces via the part-of label
 kubectl get pods --all-namespaces -l app.kubernetes.io/part-of=llm-optimization-platform
 ```
+
+Expected output (1 gateway, 2 each for team services):
+
+```
+NAMESPACE   NAME                            READY   STATUS
+platform    gateway-xxxxxxxxxx-xxxxx        1/1     Running
+quant       quant-api-xxxxxxxxxx-xxxxx      1/1     Running
+quant       quant-api-xxxxxxxxxx-xxxxx      1/1     Running
+finetune    finetune-api-xxxxxxxxxx-xxxxx   1/1     Running
+finetune    finetune-api-xxxxxxxxxx-xxxxx   1/1     Running
+eval        eval-api-xxxxxxxxxx-xxxxx       1/1     Running
+eval        eval-api-xxxxxxxxxx-xxxxx       1/1     Running
+```
+
+> The `app.kubernetes.io/part-of` label propagates to pod templates via `includeTemplates: true` in the base kustomization.
 
 ### 5.4 Install Python dependencies (for local development)
 
@@ -740,12 +766,14 @@ The `github_oidc` Terraform module creates the OIDC provider and IAM role `llmpl
 
 ### Team Services
 
-| Variable                  | Default           | Used By                           |
-| ------------------------- | ----------------- | --------------------------------- |
-| `SAGEMAKER_ENDPOINT_NAME` | `<team>-endpoint` | quant-api, finetune-api, eval-api |
-| `SAGEMAKER_TIMEOUT_MS`    | `30000`           | quant-api                         |
-| `ENABLE_FALLBACK`         | `false`           | quant-api                         |
-| `AB_ROUTING_ENABLED`      | `true`            | finetune-api                      |
+| Variable                  | Default      | Used By                           |
+| ------------------------- | ------------ | --------------------------------- |
+| `SAGEMAKER_ENDPOINT_NAME` | `""` (empty) | quant-api, finetune-api, eval-api |
+| `SAGEMAKER_TIMEOUT_MS`    | `30000`      | quant-api                         |
+| `ENABLE_FALLBACK`         | `false`      | quant-api                         |
+| `AB_ROUTING_ENABLED`      | `true`       | finetune-api                      |
+
+> **Dev mode:** `SAGEMAKER_ENDPOINT_NAME` is set to `""` (empty) in the base ConfigMaps. When empty, the service lifespans skip SageMaker client initialization and health probes pass without requiring a live SageMaker endpoint. Set it to a real endpoint name (e.g., `quant-endpoint`) when SageMaker is provisioned.
 
 ### Shared Telemetry
 
@@ -863,11 +891,87 @@ aws ecr get-login-password --region us-west-2 | \
   docker login --username AWS --password-stdin \
   "${AWS_ACCOUNT_ID}.dkr.ecr.us-west-2.amazonaws.com"
 
-# Check if the image exists
+# Check if the image exists with the expected tag
 aws ecr describe-images \
   --repository-name llmplatform-dev/gateway \
   --query 'imageDetails[*].imageTags'
 ```
+
+Common causes:
+
+- **`InvalidImageName`** — literal `ACCOUNT_ID` placeholder still in manifests. Run `grep -r ACCOUNT_ID k8s/` to check, then replace with your real account ID.
+- **`ImagePullBackOff` with `not found`** — the image tag doesn't match. The dev overlay sets `newTag: dev-latest` via Kustomize, so images must be pushed with the `dev-latest` tag (not just `latest`).
+
+### Service pods CrashLoopBackOff — import errors
+
+If services crash with `ModuleNotFoundError: No module named 'shared'`:
+
+- Ensure `ENV PYTHONPATH=/app` is set in the Dockerfile. Without it, Python can't resolve imports like `from shared.telemetry import setup_telemetry` when `WORKDIR` is `/app/<svc>/`.
+
+If services crash with `ImportError` from `opentelemetry.*`:
+
+- Check that `httpx` is listed in `services/shared/requirements.txt` (required by `opentelemetry-instrumentation-httpx`).
+- The shared telemetry module relies on SDK-default W3C propagation — no explicit propagator packages needed.
+
+### Health probe failures (startup 404 or 503)
+
+If pods are `Running` but `0/1 Ready` and logs show `GET /startup` returning 404 or 503:
+
+- **Gateway 404** — the gateway needs `/startup`, `/health`, and `/ready` endpoints in `main.py`.
+- **Team services 503** — the `HealthChecker.startup_check()` calls `sagemaker_client.check_endpoint_status()`. If no SageMaker endpoint exists, it always returns `False`. Set `SAGEMAKER_ENDPOINT_NAME=""` in the ConfigMap so the lifespan passes `None` to `HealthChecker`, which then auto-transitions to `READY` state.
+
+---
+
+## Teardown
+
+Two options depending on how long you'll be away.
+
+### Option A — Pause nodes (keep cluster shell)
+
+Scales all EC2 node groups to zero. The EKS control plane stays (~$0.10/hr) but all node, GPU, and pod costs stop immediately. Fastest way to resume — scale back up and re-apply manifests.
+
+```bash
+cd terraform
+
+# Scale every node group to 0
+terraform apply \
+  -var="general_desired=0" -var="general_min=0" \
+  -var="gpu_desired=0"     -var="gpu_min=0"
+```
+
+To resume next session:
+
+```bash
+# Restore node counts (adjust to your defaults)
+terraform apply \
+  -var="general_desired=2" -var="general_min=1" \
+  -var="gpu_desired=1"     -var="gpu_min=0"
+
+# Wait for nodes
+kubectl get nodes -w
+
+# Re-apply workloads (pods were evicted when nodes disappeared)
+kubectl apply -k k8s/overlays/dev/
+kubectl apply -k k8s/base/llm-baseline/
+kubectl apply -k k8s/base/observability/
+```
+
+### Option B — Full teardown (zero cost, recommended overnight)
+
+Destroys everything — EKS cluster, VPC, node groups, IAM roles, ECR repos. Zero AWS spend. All manifests and code are in Git, so nothing is lost. Full rebuild takes ~15–20 minutes.
+
+```bash
+# 1. Delete K8s workloads first (releases ELBs/PVCs that block Terraform)
+kubectl delete -k k8s/overlays/dev/
+kubectl delete -k k8s/base/llm-baseline/
+kubectl delete namespace observability --timeout=60s
+
+# 2. Destroy all Terraform infrastructure
+cd terraform
+terraform destroy
+```
+
+To rebuild from scratch, follow the guide from [Phase 1](#phase-1--provision-infrastructure-terraform).
 
 ---
 

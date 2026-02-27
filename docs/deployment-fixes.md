@@ -547,6 +547,16 @@ $ curl localhost:8000/v1/models | jq '.data[0].id'
 "TheBloke/Mistral-7B-Instruct-v0.2-AWQ"
 ```
 
+All 4 application services running:
+
+```
+NAMESPACE   NAME                            READY   STATUS
+platform    gateway-5bcfd5d67c-bvxpt        1/1     Running
+quant       quant-api-674874d4b-bz82x       1/1     Running
+finetune    finetune-api-65ffbc86c7-rlfhc   1/1     Running
+eval        eval-api-cc87df6bf-4t4hk        1/1     Running
+```
+
 ---
 
 ## 16. vLLM GPU Memory Exhaustion — Mistral-7B fp16 on T4
@@ -647,3 +657,569 @@ Additionally, the live cluster had a stale `vllm-baseline` Service (from `servic
 
 **Files removed:** `deployment.yaml`, `service.yaml`, `pvc.yaml`
 **Files modified:** `scripts/golden-checks.sh`, `k8s/base/llm-baseline/hf-token-secret.yaml`
+
+---
+
+## 18. Base Kustomization — Broken References to Deleted Files
+
+**Symptom:** `kubectl apply -k k8s/overlays/dev/` failed with:
+
+```
+accumulating resources: accumulation err='accumulating resources from 'llm-baseline/deployment.yaml':
+  evalsymlink failure on '/home/.../k8s/base/llm-baseline/deployment.yaml': lstat ... no such file or directory
+```
+
+**Root Cause:** Fix #17 deleted `deployment.yaml`, `service.yaml`, and `pvc.yaml` from `k8s/base/llm-baseline/`, but `k8s/base/kustomization.yaml` still listed them as resources on lines 36–38.
+
+**Fix:** Removed the three stale resource references from `k8s/base/kustomization.yaml` and added comments explaining that llm-baseline has its own `kustomization.yaml` and should be applied separately:
+
+```yaml
+# Before
+resources:
+  # ...namespaces, gateway, quant-api, finetune-api, eval-api...
+  - llm-baseline/deployment.yaml
+  - llm-baseline/service.yaml
+  - llm-baseline/pvc.yaml
+
+# After
+resources:
+  # ...namespaces, gateway, quant-api, finetune-api, eval-api...
+  # llm-baseline has its own kustomization.yaml — apply separately:
+  #   kubectl apply -k k8s/base/llm-baseline/
+```
+
+**File modified:** `k8s/base/kustomization.yaml`
+
+---
+
+## 19. InvalidImageName — Literal `ACCOUNT_ID` Placeholder
+
+**Symptom:** All 4 application service pods stuck in `InvalidImageName`:
+
+```
+Failed to apply default image tag
+  "ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/gateway:latest":
+  couldn't parse image name: repository name must be lowercase
+```
+
+**Root Cause:** All base deployment manifests and service account IRSA annotations used the literal string `ACCOUNT_ID` instead of the real AWS account ID `388691194728`.
+
+**Affected files (11 total):**
+
+| File Type            | Files                                                                    |
+| -------------------- | ------------------------------------------------------------------------ |
+| Base deployments (4) | `k8s/base/{gateway,quant-api,finetune-api,eval-api}/deployment.yaml`     |
+| Service accounts (4) | `k8s/base/{gateway,quant-api,finetune-api,eval-api}/serviceaccount.yaml` |
+| Overlay images (2)   | `k8s/overlays/{staging,prod}/kustomization.yaml`                         |
+| Ingress patch (1)    | `k8s/overlays/dev/patches/ingress-dev.yaml`                              |
+
+**Fix:**
+
+```bash
+sed -i 's/ACCOUNT_ID/388691194728/g' \
+  k8s/base/*/deployment.yaml \
+  k8s/base/*/serviceaccount.yaml \
+  k8s/overlays/dev/patches/ingress-dev.yaml \
+  k8s/overlays/staging/kustomization.yaml \
+  k8s/overlays/prod/kustomization.yaml
+```
+
+---
+
+## 20. ImagePullBackOff — Tag Mismatch (`latest` vs `dev-latest`)
+
+**Symptom:** After fixing the account ID, quant-api, finetune-api, and eval-api pods showed `ImagePullBackOff`:
+
+```
+Failed to pull image "...llmplatform-dev/finetune-api:dev-latest":
+  ...llmplatform-dev/finetune-api:dev-latest: not found
+```
+
+**Root Cause:** Docker images were built and pushed with the tag `:latest`, but the dev overlay `k8s/overlays/dev/kustomization.yaml` uses Kustomize `images:` to override the tag to `:dev-latest`:
+
+```yaml
+images:
+  - name: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/gateway
+    newTag: dev-latest
+```
+
+**Fix:** Tagged and pushed all 4 images with the `dev-latest` tag:
+
+```bash
+ECR=388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev
+for svc in gateway quant-api finetune-api eval-api; do
+  docker tag $ECR/$svc:latest $ECR/$svc:dev-latest
+  docker push $ECR/$svc:dev-latest
+done
+```
+
+---
+
+## 21. Broken Dockerfiles — `COPY ../shared` Not Allowed
+
+**Symptom:** Docker builds for quant-api, finetune-api, and eval-api failed because `COPY ../shared /app/shared` attempted to copy from outside the build context.
+
+**Root Cause:** The three service Dockerfiles used `COPY ../shared /app/shared`, but Docker prohibits copying files from outside the build context. The gateway Dockerfile had already been fixed to use `services/` as the build context.
+
+**Fix:** Rewrote all 3 Dockerfiles to match the gateway pattern — using `services/` as the Docker build context:
+
+```dockerfile
+# Before (built from services/<svc>/ context — can't reach ../shared)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY ../shared /app/shared
+COPY . /app
+
+# After (built from services/ context)
+COPY shared/requirements.txt /app/shared/requirements.txt
+RUN pip install --no-cache-dir -r /app/shared/requirements.txt
+COPY <svc>/requirements.txt /app/<svc>/requirements.txt
+RUN pip install --no-cache-dir -r /app/<svc>/requirements.txt
+COPY shared/ /app/shared/
+COPY <svc>/ /app/<svc>/
+WORKDIR /app/<svc>
+```
+
+Build command uses `services/` as context:
+
+```bash
+docker build -t $ECR/$svc:dev-latest -f $svc/Dockerfile .
+# Run from within services/ directory
+```
+
+**Files modified:** `services/quant-api/Dockerfile`, `services/finetune-api/Dockerfile`, `services/eval-api/Dockerfile`
+
+---
+
+## 22. ModuleNotFoundError: `shared` — Missing PYTHONPATH
+
+**Symptom:** All 4 service pods crashed on startup with:
+
+```
+ModuleNotFoundError: No module named 'shared'
+```
+
+**Root Cause:** The Dockerfile sets `WORKDIR /app/gateway` (or `/app/quant-api`, etc.) before running uvicorn. When Python tries `from shared.telemetry import setup_telemetry`, the `shared` package is at `/app/shared/`, which is not the current working directory and not on `sys.path`.
+
+**Fix:** Added `ENV PYTHONPATH=/app` to all 4 Dockerfiles so Python can resolve `shared.*` imports from any working directory:
+
+```dockerfile
+WORKDIR /app/gateway
+
+ENV PYTHONPATH=/app
+
+EXPOSE 8000
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+**Files modified:** `services/gateway/Dockerfile`, `services/quant-api/Dockerfile`, `services/finetune-api/Dockerfile`, `services/eval-api/Dockerfile`
+
+---
+
+## 23. OpenTelemetry Import Errors in shared/telemetry.py
+
+**Symptom:** Two different import errors across services:
+
+Gateway + eval-api:
+
+```
+ImportError: cannot import name 'TraceContextTextMapPropagator'
+  from 'opentelemetry.trace.propagation'
+```
+
+Quant-api + finetune-api:
+
+```
+ModuleNotFoundError: No module named 'httpx'
+```
+
+**Root Cause:** Two bugs in `services/shared/telemetry.py`:
+
+1. **Wrong import path** — `TraceContextTextMapPropagator` was imported from `opentelemetry.trace.propagation` but that module doesn't export it. The correct path would be `opentelemetry.propagators.tracecontext`, which requires the separate `opentelemetry-propagator-tracecontext` package — but W3C propagation is already auto-configured by the SDK, making the explicit setup unnecessary.
+
+2. **Missing transitive dependency** — `opentelemetry-instrumentation-httpx` requires `httpx` at runtime, but `httpx` wasn't listed in `services/shared/requirements.txt`. (Gateway had it separately; the other services didn't.)
+
+**Fix:**
+
+1. Removed explicit W3C propagator setup from `services/shared/telemetry.py` (the OpenTelemetry SDK auto-configures W3C Trace Context + Baggage propagation by default):
+
+```python
+# Removed these imports:
+# from opentelemetry.propagate import set_global_textmap
+# from opentelemetry.propagators.composite import CompositePropagator
+# from opentelemetry.trace.propagation import TraceContextTextMapPropagator
+# from opentelemetry.baggage.propagation import W3CBaggagePropagator
+
+# Removed this block:
+# set_global_textmap(CompositePropagator([
+#     TraceContextTextMapPropagator(),
+#     W3CBaggagePropagator()
+# ]))
+```
+
+2. Added `httpx>=0.24,<1` to `services/shared/requirements.txt`.
+
+**Files modified:** `services/shared/telemetry.py`, `services/shared/requirements.txt`
+
+---
+
+## 24. Health Probe Failures — Gateway + SageMaker Dependency
+
+**Symptom:** After fixing all import errors, pods were `Running` but `0/1 Ready`. Startup probes returned:
+
+- Gateway: `GET /startup` → **404 Not Found** (endpoint doesn't exist)
+- Quant/finetune/eval: `GET /startup` → **503 Service Unavailable**
+
+The deployment's `startupProbe` (30 failures × 5s = 150s) would eventually kill the pods, causing `CrashLoopBackOff`.
+
+**Root Cause:** Two separate issues:
+
+1. **Gateway had no health endpoints.** Its `main.py` only defined the `/api/{team}/predict` route — no `/startup`, `/health`, or `/ready` handlers. All other services had them via `shared.health.HealthChecker`.
+
+2. **HealthChecker.startup_check() required SageMaker.** The startup check called `sagemaker_client.check_endpoint_status()` which calls `describe_endpoint()`. In dev, no SageMaker endpoints exist (`quant-endpoint`, `finetune-endpoint`, `eval-endpoint` are placeholder names), so the check always returned `False`.
+
+**Fix:**
+
+1. Added `/startup`, `/health`, and `/ready` endpoints to `services/gateway/main.py`:
+
+```python
+@app.get("/startup")
+async def startup():
+    return {"status": "started", "service": "gateway"}
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "service": "gateway"}
+
+@app.get("/ready")
+async def ready():
+    return {"status": "ready", "service": "gateway"}
+```
+
+2. Made `HealthChecker` handle a `None` SageMaker client — when no client is provided, startup/readiness checks pass based on state alone:
+
+```python
+# services/shared/health.py
+async def startup_check(self) -> bool:
+    if self.state == ServiceState.STARTING:
+        if self.sagemaker_client is None:
+            self.state = ServiceState.READY
+            return True
+        # ...existing SageMaker check...
+
+async def readiness_check(self) -> bool:
+    if self.sagemaker_client is None:
+        return self.state == ServiceState.READY
+    # ...existing SageMaker check...
+```
+
+3. Made all 3 team service lifespans pass `None` when `SAGEMAKER_ENDPOINT_NAME` is empty:
+
+```python
+# services/{quant,finetune,eval}-api/main.py
+endpoint_name = os.getenv("SAGEMAKER_ENDPOINT_NAME", "")
+if endpoint_name:
+    app.state.sagemaker = SageMakerClient(endpoint_name=endpoint_name, ...)
+else:
+    app.state.sagemaker = None
+app.state.health = HealthChecker(app.state.sagemaker)
+```
+
+4. Cleared `SAGEMAKER_ENDPOINT_NAME` in the base ConfigMaps (set to empty string) so dev services start without SageMaker:
+
+```yaml
+# k8s/base/{quant-api,finetune-api,eval-api}/configmap.yaml
+SAGEMAKER_ENDPOINT_NAME: "" # was "quant-endpoint" / "finetune-endpoint" / "eval-endpoint"
+```
+
+**Files modified:**
+
+- `services/gateway/main.py`
+- `services/shared/health.py`
+- `services/quant-api/main.py`, `services/finetune-api/main.py`, `services/eval-api/main.py`
+- `k8s/base/quant-api/configmap.yaml`, `k8s/base/finetune-api/configmap.yaml`, `k8s/base/eval-api/configmap.yaml`
+
+---
+
+## 25. Service Port Mismatch — port 80 vs containerPort 8000
+
+**Symptom:** `kubectl port-forward -n platform svc/gateway 8000:8000` failed with `Service gateway does not have a service port 8000`. Port-forward only worked with `8000:80`.
+
+**Root Cause:** All four service YAMLs (gateway, quant-api, finetune-api, eval-api) set `port: 80` with `targetPort: 8000`. While technically valid, this contradicts the README's Service URLs table and port-forward commands (which all reference port 8000).
+
+**Fix:** Changed `port: 80` to `port: 8000` in all four service manifests so the service port matches the containerPort:
+
+```yaml
+# k8s/base/{gateway,quant-api,finetune-api,eval-api}/service.yaml
+ports:
+  - port: 8000 # was: 80
+    targetPort: 8000
+    protocol: TCP
+    name: http
+```
+
+Applied with `kubectl apply -k k8s/overlays/dev/`. All four services reconfigured. Port-forward now works as documented: `kubectl port-forward -n <ns> svc/<name> 8000:8000`.
+
+**Files modified:**
+
+- `k8s/base/gateway/service.yaml`
+- `k8s/base/quant-api/service.yaml`
+- `k8s/base/finetune-api/service.yaml`
+- `k8s/base/eval-api/service.yaml`
+
+---
+
+## 26. Gateway Route Table Missing Port — upstream_timeout
+
+**Symptom:** `POST /api/quant/predict` returned `{"error": "upstream_timeout"}`. The gateway could not reach team services.
+
+**Root Cause:** Fix #25 changed all service ports from 80 → 8000, but the gateway ConfigMap's `ROUTE_TABLE` and `*_SERVICE_URL` entries still used bare hostnames (e.g. `http://quant-api.quant.svc.cluster.local`), which default to port 80. Since the services no longer listen on port 80, every upstream connection timed out.
+
+**Fix:** Appended `:8000` to all six service URLs in the gateway ConfigMap:
+
+```yaml
+# k8s/base/gateway/configmap.yaml
+QUANT_SERVICE_URL: "http://quant-api.quant.svc.cluster.local:8000"
+FINETUNE_SERVICE_URL: "http://finetune-api.finetune.svc.cluster.local:8000"
+EVAL_SERVICE_URL: "http://eval-api.eval.svc.cluster.local:8000"
+
+ROUTE_TABLE: |
+  {
+    "quant":    { "url": "http://quant-api.quant.svc.cluster.local:8000",    ... },
+    "finetune": { "url": "http://finetune-api.finetune.svc.cluster.local:8000", ... },
+    "eval":     { "url": "http://eval-api.eval.svc.cluster.local:8000",      ... }
+  }
+```
+
+Applied with `kubectl apply -k k8s/overlays/dev/`, then `kubectl rollout restart deployment/gateway -n platform`.
+
+**Files modified:**
+
+- `k8s/base/gateway/configmap.yaml`
+
+---
+
+## 27. Dev-Mode Predict Crash — NoneType has no attribute 'invoke'
+
+**Symptom:** After fixing the timeout (fix #26), `POST /api/quant/predict` returned `{"error": "prediction_failed", "message": "'NoneType' object has no attribute 'invoke'"}`.
+
+**Root Cause:** When `SAGEMAKER_ENDPOINT_NAME` is empty (dev mode), all three team services set `app.state.sagemaker = None`. The `/predict` handler unconditionally calls `app.state.sagemaker.invoke(...)`, crashing on `NoneType`.
+
+**Fix:** Created `services/shared/vllm_client.py` — a drop-in `VLLMClient` class that implements the same `.invoke()` and `.check_endpoint_status()` interface as `SageMakerClient`, but forwards requests to the in-cluster vLLM `/v1/completions` endpoint. All three team services now instantiate `VLLMClient()` instead of `None` when no SageMaker endpoint is configured:
+
+```python
+# services/shared/vllm_client.py
+class VLLMClient:
+    """Async vLLM client with the same .invoke() interface as SageMakerClient."""
+
+    async def invoke(self, payload, correlation_id, variant=None) -> dict:
+        # Translates {"inputs": ..., "parameters": {...}} → /v1/completions
+        # Returns {"generated_text": ..., "model_version": ..., "latency_ms": ...}
+
+    async def check_endpoint_status(self) -> bool:
+        # GET /health on vLLM server
+```
+
+```python
+# services/{quant,finetune,eval}-api/main.py
+from shared.vllm_client import VLLMClient
+# ...
+    if endpoint_name:
+        app.state.sagemaker = SageMakerClient(...)
+    else:
+        app.state.sagemaker = VLLMClient()   # was: None
+```
+
+The `VLLMClient` auto-discovers the model name via `/v1/models` and uses `VLLM_BASE_URL` env var (defaulting to `http://mistral-7b-baseline.llm-baseline.svc.cluster.local:8000`).
+
+Rebuilt and pushed all 4 Docker images (`dev-latest`), then restarted all deployments. End-to-end chain now works:
+
+```
+gateway → quant-api → VLLMClient → vLLM (Mistral-7B-AWQ) → response (~1.4s)
+```
+
+**Files created:**
+
+- `services/shared/vllm_client.py`
+
+**Files modified:**
+
+- `services/quant-api/main.py`
+- `services/finetune-api/main.py`
+- `services/eval-api/main.py`
+
+---
+
+## 28. EBS CSI Driver Addon — Already Exists
+
+**Symptom:** Attempting to install the EBS CSI driver addon failed:
+
+```
+An error occurred (ResourceInUseException) when calling the CreateAddon operation: Addon already exists.
+```
+
+**Root Cause:** The `aws-ebs-csi-driver` addon was already installed on the cluster from a prior deployment. Using `create-addon` fails if the addon exists.
+
+**Fix:** Use `update-addon` with `--resolve-conflicts OVERWRITE` instead:
+
+```bash
+aws eks update-addon \
+  --cluster-name llmplatform-dev \
+  --addon-name aws-ebs-csi-driver \
+  --service-account-role-arn "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/llmplatform-dev-ebs-csi-driver" \
+  --region us-west-2 \
+  --resolve-conflicts OVERWRITE
+```
+
+Or check current status first:
+
+```bash
+aws eks describe-addon \
+  --cluster-name llmplatform-dev \
+  --addon-name aws-ebs-csi-driver \
+  --region us-west-2
+```
+
+---
+
+## 29. Grafana — Missing ConfigMaps and Secret (ContainerCreating)
+
+**Symptom:** Grafana pod stuck in `ContainerCreating`:
+
+```
+MountVolume.SetUp failed for volume "dashboards" : configmap "grafana-dashboards" not found
+MountVolume.SetUp failed for volume "dashboards-provider" : configmap "grafana-dashboards-provider" not found
+```
+
+**Root Cause:** `grafana-deployment.yaml` references three resources never defined in any manifest:
+
+- ConfigMap `grafana-dashboards-provider` — dashboard provisioning config
+- ConfigMap `grafana-dashboards` — JSON dashboard definitions
+- Secret `grafana-secrets` — admin password
+
+**Fix:** Created all three as manifest files so `kubectl apply -f k8s/base/observability/` picks them up on future deployments.
+
+`k8s/base/observability/grafana-dashboards.yaml`:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-provider
+  namespace: observability
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: observability
+data:
+  llm-platform.json: |
+    { ... LLM Platform Overview dashboard JSON ... }
+```
+
+`k8s/base/observability/grafana-secrets.yaml`:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-secrets
+  namespace: observability
+type: Opaque
+stringData:
+  admin-password: admin
+```
+
+**Files created:**
+
+- `k8s/base/observability/grafana-dashboards.yaml`
+- `k8s/base/observability/grafana-secrets.yaml`
+
+---
+
+## 30. Prometheus + Tempo — Pending (Insufficient CPU/Memory)
+
+**Symptom:** Prometheus and Tempo pods stuck in `Pending`:
+
+```
+0/2 nodes are available: 2 Insufficient cpu, 2 Insufficient memory.
+persistentvolumeclaim "prometheus-data" not found.
+```
+
+PVCs for `prometheus-data` and `tempo-data` were also `Pending` because the StorageClass uses `WaitForFirstConsumer` — PVCs only bind after the pod is scheduled.
+
+**Root Cause:** Two issues:
+
+1. **Resource requests too high for `t3.medium` nodes** (~1.93 vCPU / 3.3 GiB allocatable per node). Prometheus requested `500m` CPU / `1Gi` memory, and both nodes were already at 90-95% utilization from app workloads (eval-api, finetune-api, quant-api, gateway, loki, otel-collector, grafana).
+
+2. **Not enough nodes.** The dev cluster had `desired_size=2` for the general node group. With 6 namespaces of workloads (platform, quant, finetune, eval, observability, kube-system), 2× `t3.medium` is insufficient.
+
+**Fix:**
+
+1. Reduced resource requests:
+
+```yaml
+# prometheus-deployment.yaml
+resources:
+  requests:
+    cpu: 100m       # was: 500m
+    memory: 256Mi   # was: 1Gi
+  limits:
+    cpu: "1"        # was: "2"
+    memory: 2Gi     # was: 4Gi
+
+# tempo-deployment.yaml
+resources:
+  requests:
+    cpu: 100m       # was: 200m
+    memory: 128Mi   # was: 256Mi
+  limits:
+    cpu: 500m       # was: "1"
+    memory: 512Mi   # was: 1Gi
+```
+
+2. Scaled general node group from 2 → 4 nodes:
+
+```bash
+aws eks update-nodegroup-config \
+  --cluster-name llmplatform-dev \
+  --nodegroup-name llmplatform-dev-general \
+  --scaling-config minSize=2,maxSize=5,desiredSize=4 \
+  --region us-west-2
+```
+
+3. Updated Terraform to match:
+
+```terraform
+# infra/envs/dev/terraform.tfvars
+general = {
+  instance_types = ["t3.medium"]
+  desired_size   = 4    # was: 2
+  min_size       = 2    # was: 1
+  max_size       = 5    # was: 4
+  ...
+}
+```
+
+After the 3rd and 4th nodes joined, Tempo scheduled immediately. Prometheus required the 4th node because the 3rd was consumed by pending app workloads (quant-api, eval-api replicas).
+
+**Files modified:**
+
+- `k8s/base/observability/prometheus-deployment.yaml`
+- `k8s/base/observability/tempo-deployment.yaml`
+- `infra/envs/dev/terraform.tfvars`
+
+**Note:** Run `terraform apply` in `infra/envs/dev/` to sync state with the live node group scaling.

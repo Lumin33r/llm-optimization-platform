@@ -6,7 +6,7 @@ metadata:
 data:
   LOG_LEVEL: "DEBUG"
   AWS_REGION: "us-west-2"
-  SAGEMAKER_ENDPOINT_NAME: "quant-endpoint"
+  SAGEMAKER_ENDPOINT_NAME: ""
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability.svc.cluster.local:4317"
   OTEL_SERVICE_NAME: "quant-api"
 

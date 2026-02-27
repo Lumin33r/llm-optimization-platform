@@ -20,13 +20,13 @@ replicas:
     count: 3
 
 images:
-  - name: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/llmplatform-prod/gateway
+  - name: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-prod/gateway
     newTag: v1.0.0
-  - name: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/llmplatform-prod/quant-api
+  - name: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-prod/quant-api
     newTag: v1.0.0
-  - name: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/llmplatform-prod/finetune-api
+  - name: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-prod/finetune-api
     newTag: v1.0.0
-  - name: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/llmplatform-prod/eval-api
+  - name: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-prod/eval-api
     newTag: v1.0.0
 
 patches:

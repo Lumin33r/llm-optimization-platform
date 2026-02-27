@@ -26,10 +26,15 @@ class HealthChecker:
         Check if service startup is complete.
         Returns True when:
         - Configuration loaded
-        - SageMaker endpoint is reachable (initial check)
+        - SageMaker endpoint is reachable (if configured)
         - All dependencies initialized
         """
         if self.state == ServiceState.STARTING:
+            # If no SageMaker client, go straight to READY (dev/local mode)
+            if self.sagemaker_client is None:
+                self.state = ServiceState.READY
+                return True
+
             # Verify SageMaker endpoint exists and is InService
             try:
                 endpoint_ok = await self.sagemaker_client.check_endpoint_status()
@@ -46,11 +51,15 @@ class HealthChecker:
         Check if service is ready to handle traffic.
         Returns True when:
         - Startup complete
-        - SageMaker endpoint InService (recent check)
+        - SageMaker endpoint InService (if configured)
         - No circuit breaker open
         """
         if self.state in (ServiceState.STARTING, ServiceState.UNHEALTHY):
             return False
+
+        # If no SageMaker client, just check state
+        if self.sagemaker_client is None:
+            return self.state == ServiceState.READY
 
         # Periodic SageMaker health verification
         import time

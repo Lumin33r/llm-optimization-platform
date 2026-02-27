@@ -1,0 +1,147 @@
+# k8s/base/observability/grafana-dashboards.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-provider
+  namespace: observability
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: observability
+data:
+  llm-platform.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "id": null,
+      "links": [],
+      "panels": [
+        {
+          "title": "Request Rate (req/s)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "targets": [
+            {
+              "expr": "sum(rate(vllm:request_success_total[5m]))",
+              "legendFormat": "Total RPS"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            }
+          }
+        },
+        {
+          "title": "Generation Throughput (tokens/s)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "targets": [
+            {
+              "expr": "vllm:avg_generation_throughput_toks_per_s",
+              "legendFormat": "generation tok/s"
+            },
+            {
+              "expr": "vllm:avg_prompt_throughput_toks_per_s",
+              "legendFormat": "prompt tok/s"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            }
+          }
+        },
+        {
+          "title": "Active / Waiting / Swapped Requests",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "targets": [
+            {
+              "expr": "vllm:num_requests_running",
+              "legendFormat": "running"
+            },
+            {
+              "expr": "vllm:num_requests_waiting",
+              "legendFormat": "waiting"
+            },
+            {
+              "expr": "vllm:num_requests_swapped",
+              "legendFormat": "swapped"
+            }
+          ]
+        },
+        {
+          "title": "GPU KV-Cache Usage",
+          "type": "gauge",
+          "gridPos": { "h": 8, "w": 6, "x": 12, "y": 8 },
+          "targets": [
+            {
+              "expr": "vllm:gpu_cache_usage_perc * 100",
+              "legendFormat": "GPU Cache %"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "min": 0,
+              "max": 100,
+              "thresholds": {
+                "steps": [
+                  { "value": 0, "color": "green" },
+                  { "value": 70, "color": "yellow" },
+                  { "value": 90, "color": "red" }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "CPU KV-Cache Usage",
+          "type": "gauge",
+          "gridPos": { "h": 8, "w": 6, "x": 18, "y": 8 },
+          "targets": [
+            {
+              "expr": "vllm:cpu_cache_usage_perc * 100",
+              "legendFormat": "CPU Cache %"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "min": 0,
+              "max": 100,
+              "thresholds": {
+                "steps": [
+                  { "value": 0, "color": "green" },
+                  { "value": 70, "color": "yellow" },
+                  { "value": 90, "color": "red" }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["llm", "platform"],
+      "templating": { "list": [] },
+      "time": { "from": "now-1h", "to": "now" },
+      "title": "LLM Platform Overview",
+      "uid": "llm-platform-overview"
+    }

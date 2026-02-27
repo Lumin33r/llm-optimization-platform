@@ -10,6 +10,7 @@ import uuid
 
 from shared.health import HealthChecker
 from shared.sagemaker_client import SageMakerClient
+from shared.vllm_client import VLLMClient
 from shared.telemetry import setup_telemetry
 
 
@@ -34,12 +35,16 @@ class PredictResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize and cleanup resources."""
-    # Startup
-    app.state.sagemaker = SageMakerClient(
-        endpoint_name=os.getenv("SAGEMAKER_ENDPOINT_NAME", "eval-endpoint"),
-        timeout_ms=int(os.getenv("SAGEMAKER_TIMEOUT_MS", "45000")),
-        enable_fallback=os.getenv("ENABLE_FALLBACK", "false").lower() == "true"
-    )
+    # Startup — SageMaker client is optional (may not exist in dev)
+    endpoint_name = os.getenv("SAGEMAKER_ENDPOINT_NAME", "")
+    if endpoint_name:
+        app.state.sagemaker = SageMakerClient(
+            endpoint_name=endpoint_name,
+            timeout_ms=int(os.getenv("SAGEMAKER_TIMEOUT_MS", "45000")),
+            enable_fallback=os.getenv("ENABLE_FALLBACK", "false").lower() == "true"
+        )
+    else:
+        app.state.sagemaker = VLLMClient()
     app.state.health = HealthChecker(app.state.sagemaker)
 
     yield

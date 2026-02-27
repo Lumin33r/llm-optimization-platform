@@ -20,3 +20,11 @@ data:
       - job_name: 'prometheus'
         static_configs:
           - targets: ['localhost:9090']
+
+      # Scrape vLLM baseline model metrics
+      - job_name: 'vllm'
+        metrics_path: /metrics
+        static_configs:
+          - targets: ['mistral-7b-baseline.llm-baseline.svc:8000']
+            labels:
+              model: 'mistral-7b-instruct-awq'

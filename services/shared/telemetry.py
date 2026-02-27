@@ -12,10 +12,6 @@ from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_NAMESPAC
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.instrumentation.botocore import BotocoreInstrumentor
-from opentelemetry.propagate import set_global_textmap
-from opentelemetry.propagators.composite import CompositePropagator
-from opentelemetry.trace.propagation import TraceContextTextMapPropagator
-from opentelemetry.baggage.propagation import W3CBaggagePropagator
 
 
 def setup_telemetry(app, service_name: str, namespace: str = "platform"):
@@ -49,11 +45,7 @@ def setup_telemetry(app, service_name: str, namespace: str = "platform"):
     meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
     metrics.set_meter_provider(meter_provider)
 
-    # Use W3C Trace Context + Baggage propagation (matches design-08 schema)
-    set_global_textmap(CompositePropagator([
-        TraceContextTextMapPropagator(),
-        W3CBaggagePropagator()
-    ]))
+    # W3C Trace Context + Baggage propagation is auto-configured by the SDK
 
     # Auto-instrument FastAPI
     FastAPIInstrumentor.instrument_app(app)
