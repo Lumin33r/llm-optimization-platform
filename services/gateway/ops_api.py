@@ -211,6 +211,9 @@ async def get_stats():
     window_start = now - timedelta(hours=24)
 
     # --- Fire all PromQL queries in parallel ---
+    # NOTE: We use raw cumulative counters (sum(...)) instead of increase(...)
+    # because the OTEL-to-Prometheus remote-write pipeline batch-inserts data
+    # points, which causes increase() to undercount due to counter-reset detection.
     (
         total_res,
         err_rate_res,
@@ -220,23 +223,23 @@ async def get_stats():
         req_by_team_res,
         err_by_team_res,
     ) = await asyncio.gather(
-        _prom_query('sum(increase(gateway_requests_total[24h]))'),
+        _prom_query('sum(gateway_requests_total)'),
         _prom_query(
-            'sum(increase(gateway_requests_total{status!="success"}[24h]))'
-            ' / sum(increase(gateway_requests_total[24h])) * 100'
+            'sum(gateway_requests_total{status!="success"})'
+            ' / sum(gateway_requests_total) * 100'
         ),
         _prom_query(
-            'histogram_quantile(0.50, sum(rate(gateway_latency_ms_bucket[24h])) by (le))'
+            'histogram_quantile(0.50, sum(rate(gateway_latency_ms_bucket[5m])) by (le))'
         ),
         _prom_query(
-            'histogram_quantile(0.95, sum(rate(gateway_latency_ms_bucket[24h])) by (le))'
+            'histogram_quantile(0.95, sum(rate(gateway_latency_ms_bucket[5m])) by (le))'
         ),
         _prom_query(
-            'histogram_quantile(0.99, sum(rate(gateway_latency_ms_bucket[24h])) by (le))'
+            'histogram_quantile(0.99, sum(rate(gateway_latency_ms_bucket[5m])) by (le))'
         ),
-        _prom_query('sum by (team) (increase(gateway_requests_total[24h]))'),
+        _prom_query('sum by (team) (gateway_requests_total)'),
         _prom_query(
-            'sum by (team) (increase(gateway_requests_total{status!="success"}[24h]))'
+            'sum by (team) (gateway_requests_total{status!="success"})'
         ),
     )
 
