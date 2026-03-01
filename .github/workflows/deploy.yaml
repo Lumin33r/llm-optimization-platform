@@ -171,8 +171,12 @@ jobs:
           kubectl rollout status deployment/grafana -n observability --timeout=300s
           kubectl rollout status deployment/prometheus -n observability --timeout=300s
 
-          echo "=== Waiting for LLM baseline (may take several minutes for model download) ==="
-          kubectl rollout status deployment/mistral-7b-instruct-vllm -n llm-baseline --timeout=600s
+          echo "=== Waiting for LLM models (may take several minutes for model download) ==="
+          # Wait for each of the 4 model variants
+          for model in mistral-7b-awq mistral-7b-fp16 mistral-7b-lora mistral-7b-judge; do
+            echo "  Waiting for $model..."
+            kubectl rollout status deployment/$model -n llm-baseline --timeout=600s || echo "WARNING: $model not ready"
+          done
 
       - name: Patch dashboard with public gateway URL
         run: |
@@ -223,6 +227,13 @@ jobs:
           echo ""
           echo "=== Ops Health ==="
           curl -sf http://localhost:8080/ops/health || echo "WARNING: Ops health check failed"
+
+          echo ""
+          echo "=== Model Status ==="
+          for model in mistral-7b-awq mistral-7b-fp16 mistral-7b-lora mistral-7b-judge; do
+            echo -n "  $model: "
+            kubectl exec -n llm-baseline deployment/$model -- curl -sf http://localhost:8000/v1/models 2>/dev/null | head -c 100 || echo "not ready"
+          done
 
           echo ""
           echo "=== Deployment Complete ==="

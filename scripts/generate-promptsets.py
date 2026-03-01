@@ -215,6 +215,124 @@ PERFORMANCE_PROMPTS = [
 ]
 
 
+# --------------- Quant Quality Prompts (AWQ vs FP16 comparison) ---------------
+QUANT_QUALITY_PROMPTS = [
+    # Math precision (quantization may lose precision)
+    {"prompt_id": "qq-001", "prompt": "Calculate 7^5 step by step.", "expected_contains": ["16807"], "scenario_id": "math_precision", "max_tokens": 200, "category": "math"},
+    {"prompt_id": "qq-002", "prompt": "What is 123456 * 789?", "expected_contains": ["97", "406", "784"], "scenario_id": "math_precision", "max_tokens": 100, "category": "math"},
+    {"prompt_id": "qq-003", "prompt": "Solve: If 3x + 7 = 22, what is x?", "expected_contains": ["5"], "scenario_id": "math_precision", "max_tokens": 150, "category": "math"},
+    {"prompt_id": "qq-004", "prompt": "What is the derivative of x^3 + 2x^2 - 5x + 1?", "expected_contains": ["3x", "4x", "5"], "scenario_id": "math_precision", "max_tokens": 150, "category": "math"},
+    {"prompt_id": "qq-005", "prompt": "Calculate the area of a circle with radius 7. Use pi = 3.14159.", "expected_contains": ["153", "154"], "scenario_id": "math_precision", "max_tokens": 150, "category": "math"},
+
+    # Reasoning (quantization quality check)
+    {"prompt_id": "qq-006", "prompt": "A bat and ball cost $1.10 total. The bat costs $1.00 more than the ball. How much does the ball cost?", "expected_contains": ["0.05", "5 cents", "five cents"], "scenario_id": "reasoning", "max_tokens": 200, "category": "reasoning"},
+    {"prompt_id": "qq-007", "prompt": "If all roses are flowers and some flowers fade quickly, can we conclude that some roses fade quickly?", "expected_contains": ["no", "cannot", "not necessarily"], "scenario_id": "reasoning", "max_tokens": 200, "category": "reasoning"},
+    {"prompt_id": "qq-008", "prompt": "Three people check into a hotel room that costs $30. They each pay $10. Later the manager realizes it should be $25 and gives $5 to the bellboy to return. The bellboy keeps $2 and gives $1 back to each person. Now each person paid $9 (total $27) and the bellboy has $2 ($29). Where is the missing dollar?", "expected_contains": ["no missing", "fallacy", "error", "misleading"], "scenario_id": "reasoning", "max_tokens": 300, "category": "reasoning"},
+    {"prompt_id": "qq-009", "prompt": "In a race, you overtake the person in 2nd place. What position are you now in?", "expected_contains": ["2nd", "second"], "scenario_id": "reasoning", "max_tokens": 150, "category": "reasoning"},
+    {"prompt_id": "qq-010", "prompt": "If you have 6 apples and take away 4, how many do you have?", "expected_contains": ["4"], "scenario_id": "reasoning", "max_tokens": 100, "category": "reasoning"},
+
+    # Code generation (precision-sensitive)
+    {"prompt_id": "qq-011", "prompt": "Write a Python function to calculate fibonacci(n) recursively.", "expected_contains": ["def", "fibonacci", "return"], "scenario_id": "code_gen", "max_tokens": 200, "category": "code"},
+    {"prompt_id": "qq-012", "prompt": "Write a Python function to check if a string is a palindrome.", "expected_contains": ["def", "palindrome", "return"], "scenario_id": "code_gen", "max_tokens": 200, "category": "code"},
+    {"prompt_id": "qq-013", "prompt": "Write a SQL query to find the top 5 customers by total order value.", "expected_contains": ["SELECT", "ORDER BY", "LIMIT"], "scenario_id": "code_gen", "max_tokens": 200, "category": "code"},
+    {"prompt_id": "qq-014", "prompt": "Write a Python function to merge two sorted lists.", "expected_contains": ["def", "merge", "return"], "scenario_id": "code_gen", "max_tokens": 250, "category": "code"},
+    {"prompt_id": "qq-015", "prompt": "Write a binary search function in Python.", "expected_contains": ["def", "binary", "return"], "scenario_id": "code_gen", "max_tokens": 250, "category": "code"},
+
+    # Factual knowledge
+    {"prompt_id": "qq-016", "prompt": "What are the three laws of thermodynamics?", "expected_contains": ["energy", "entropy"], "scenario_id": "knowledge", "max_tokens": 300, "category": "science"},
+    {"prompt_id": "qq-017", "prompt": "Explain the difference between mitosis and meiosis.", "expected_contains": ["cell", "division"], "scenario_id": "knowledge", "max_tokens": 300, "category": "science"},
+    {"prompt_id": "qq-018", "prompt": "What causes the seasons on Earth?", "expected_contains": ["tilt", "axis"], "scenario_id": "knowledge", "max_tokens": 200, "category": "science"},
+    {"prompt_id": "qq-019", "prompt": "Describe the process of photosynthesis.", "expected_contains": ["light", "carbon dioxide", "oxygen"], "scenario_id": "knowledge", "max_tokens": 300, "category": "science"},
+    {"prompt_id": "qq-020", "prompt": "What is the difference between a virus and a bacterium?", "expected_contains": ["cell", "reproduce"], "scenario_id": "knowledge", "max_tokens": 300, "category": "science"},
+
+    # Language / NLP tasks
+    {"prompt_id": "qq-021", "prompt": "Translate 'The weather is beautiful today' to French.", "expected_contains": ["beau", "aujourd'hui", "temps"], "scenario_id": "translation", "max_tokens": 100, "category": "language"},
+    {"prompt_id": "qq-022", "prompt": "Summarize the concept of supply and demand in exactly two sentences.", "expected_contains": ["supply", "demand", "price"], "scenario_id": "summarization", "max_tokens": 150, "category": "language"},
+    {"prompt_id": "qq-023", "prompt": "Identify the sentiment of: 'I absolutely loved the movie, it was fantastic!'", "expected_contains": ["positive"], "scenario_id": "sentiment", "max_tokens": 100, "category": "language"},
+    {"prompt_id": "qq-024", "prompt": "Paraphrase: 'Machine learning models learn patterns from data.'", "expected_contains": ["pattern", "data", "learn"], "scenario_id": "paraphrase", "max_tokens": 100, "category": "language"},
+    {"prompt_id": "qq-025", "prompt": "Extract the named entities from: 'Barack Obama was born in Honolulu, Hawaii on August 4, 1961.'", "expected_contains": ["Obama", "Honolulu", "Hawaii"], "scenario_id": "ner", "max_tokens": 150, "category": "language"},
+
+    # Long-form stress prompts
+    {"prompt_id": "qq-026", "prompt": "Explain the observer pattern in software design with a Python example.", "expected_contains": ["class", "notify", "observer"], "scenario_id": "stress", "max_tokens": 500, "category": "code"},
+    {"prompt_id": "qq-027", "prompt": "Compare and contrast TCP and UDP protocols. Include use cases for each.", "expected_contains": ["reliable", "connection", "UDP"], "scenario_id": "stress", "max_tokens": 400, "category": "networking"},
+    {"prompt_id": "qq-028", "prompt": "Explain how a hash table works, including collision resolution strategies.", "expected_contains": ["hash", "collision", "bucket"], "scenario_id": "stress", "max_tokens": 400, "category": "cs"},
+    {"prompt_id": "qq-029", "prompt": "Describe the CAP theorem and its implications for distributed databases.", "expected_contains": ["consistency", "availability", "partition"], "scenario_id": "stress", "max_tokens": 400, "category": "cs"},
+    {"prompt_id": "qq-030", "prompt": "Explain how transformers work in NLP, including self-attention.", "expected_contains": ["attention", "query", "key"], "scenario_id": "stress", "max_tokens": 500, "category": "ml"},
+]
+
+
+# --------------- Finetune Domain Prompts (LoRA domain adaptation) ---------------
+FINETUNE_DOMAIN_PROMPTS = [
+    # Medical domain
+    {"prompt_id": "ft-001", "prompt": "What is the first-line treatment for type 2 diabetes?", "expected_contains": ["metformin"], "scenario_id": "medical", "max_tokens": 200, "category": "medical"},
+    {"prompt_id": "ft-002", "prompt": "What are the symptoms of myocardial infarction?", "expected_contains": ["chest", "pain"], "scenario_id": "medical", "max_tokens": 200, "category": "medical"},
+    {"prompt_id": "ft-003", "prompt": "Explain the difference between Type 1 and Type 2 diabetes.", "expected_contains": ["insulin"], "scenario_id": "medical", "max_tokens": 300, "category": "medical"},
+    {"prompt_id": "ft-004", "prompt": "What are the stages of chronic kidney disease?", "expected_contains": ["GFR", "stage"], "scenario_id": "medical", "max_tokens": 300, "category": "medical"},
+    {"prompt_id": "ft-005", "prompt": "Describe the mechanism of action of ACE inhibitors.", "expected_contains": ["angiotensin", "enzyme"], "scenario_id": "medical", "max_tokens": 250, "category": "medical"},
+    {"prompt_id": "ft-006", "prompt": "What is the Glasgow Coma Scale and how is it used?", "expected_contains": ["eye", "verbal", "motor"], "scenario_id": "medical", "max_tokens": 300, "category": "medical"},
+    {"prompt_id": "ft-007", "prompt": "List the warning signs of a stroke using the FAST acronym.", "expected_contains": ["face", "arm", "speech", "time"], "scenario_id": "medical", "max_tokens": 200, "category": "medical"},
+    {"prompt_id": "ft-008", "prompt": "What are common side effects of statin medications?", "expected_contains": ["muscle"], "scenario_id": "medical", "max_tokens": 200, "category": "medical"},
+    {"prompt_id": "ft-009", "prompt": "Explain what an A1C test measures and normal ranges.", "expected_contains": ["hemoglobin", "blood sugar", "glucose"], "scenario_id": "medical", "max_tokens": 200, "category": "medical"},
+    {"prompt_id": "ft-010", "prompt": "What is the difference between an MRI and CT scan?", "expected_contains": ["magnetic", "radiation"], "scenario_id": "medical", "max_tokens": 300, "category": "medical"},
+
+    # Legal domain
+    {"prompt_id": "ft-011", "prompt": "What is the difference between civil and criminal law?", "expected_contains": ["civil", "criminal"], "scenario_id": "legal", "max_tokens": 300, "category": "legal"},
+    {"prompt_id": "ft-012", "prompt": "Explain the concept of habeas corpus.", "expected_contains": ["detention", "court", "unlawful"], "scenario_id": "legal", "max_tokens": 200, "category": "legal"},
+    {"prompt_id": "ft-013", "prompt": "What is the doctrine of stare decisis?", "expected_contains": ["precedent"], "scenario_id": "legal", "max_tokens": 200, "category": "legal"},
+    {"prompt_id": "ft-014", "prompt": "Define 'burden of proof' in a legal context.", "expected_contains": ["evidence", "prove"], "scenario_id": "legal", "max_tokens": 200, "category": "legal"},
+    {"prompt_id": "ft-015", "prompt": "What are the elements of a valid contract?", "expected_contains": ["offer", "acceptance", "consideration"], "scenario_id": "legal", "max_tokens": 300, "category": "legal"},
+    {"prompt_id": "ft-016", "prompt": "Explain the difference between a felony and a misdemeanor.", "expected_contains": ["serious", "punishment"], "scenario_id": "legal", "max_tokens": 200, "category": "legal"},
+    {"prompt_id": "ft-017", "prompt": "What is the Miranda warning and when must it be given?", "expected_contains": ["right", "silent", "attorney"], "scenario_id": "legal", "max_tokens": 250, "category": "legal"},
+    {"prompt_id": "ft-018", "prompt": "Define 'tort' in legal terms and give an example.", "expected_contains": ["harm", "civil", "wrong"], "scenario_id": "legal", "max_tokens": 200, "category": "legal"},
+    {"prompt_id": "ft-019", "prompt": "What is the difference between patent and copyright?", "expected_contains": ["invention", "original work", "protect"], "scenario_id": "legal", "max_tokens": 300, "category": "legal"},
+    {"prompt_id": "ft-020", "prompt": "Explain what 'due process' means under the 14th Amendment.", "expected_contains": ["fair", "law", "rights"], "scenario_id": "legal", "max_tokens": 250, "category": "legal"},
+
+    # Code/technical domain
+    {"prompt_id": "ft-021", "prompt": "Explain Kubernetes pod scheduling and affinity rules.", "expected_contains": ["node", "affinity", "schedule"], "scenario_id": "technical", "max_tokens": 400, "category": "code"},
+    {"prompt_id": "ft-022", "prompt": "Describe how a B-tree index works in a database.", "expected_contains": ["tree", "node", "key"], "scenario_id": "technical", "max_tokens": 400, "category": "code"},
+    {"prompt_id": "ft-023", "prompt": "Explain the difference between optimistic and pessimistic concurrency control.", "expected_contains": ["lock", "conflict", "transaction"], "scenario_id": "technical", "max_tokens": 300, "category": "code"},
+    {"prompt_id": "ft-024", "prompt": "Describe the Raft consensus algorithm.", "expected_contains": ["leader", "election", "log"], "scenario_id": "technical", "max_tokens": 400, "category": "code"},
+    {"prompt_id": "ft-025", "prompt": "Explain how gRPC differs from REST APIs.", "expected_contains": ["protocol buffer", "HTTP/2", "binary"], "scenario_id": "technical", "max_tokens": 300, "category": "code"},
+
+    # General knowledge regression check
+    {"prompt_id": "ft-026", "prompt": "What is 15 * 17?", "expected_contains": ["255"], "scenario_id": "regression", "max_tokens": 50, "category": "math"},
+    {"prompt_id": "ft-027", "prompt": "What is the capital of Japan?", "expected_contains": ["Tokyo"], "scenario_id": "regression", "max_tokens": 50, "category": "knowledge"},
+    {"prompt_id": "ft-028", "prompt": "Who discovered penicillin?", "expected_contains": ["Fleming"], "scenario_id": "regression", "max_tokens": 100, "category": "knowledge"},
+    {"prompt_id": "ft-029", "prompt": "What year did the Berlin Wall fall?", "expected_contains": ["1989"], "scenario_id": "regression", "max_tokens": 50, "category": "knowledge"},
+    {"prompt_id": "ft-030", "prompt": "What is the chemical formula for glucose?", "expected_contains": ["C6H12O6"], "scenario_id": "regression", "max_tokens": 100, "category": "knowledge"},
+]
+
+
+# --------------- Eval Calibration Prompts (Judge scoring validation) ---------------
+EVAL_CALIBRATION_PROMPTS = [
+    # Good responses (expect high scores)
+    {"prompt_id": "ec-001", "prompt": "What is machine learning?", "expected_contains": ["data", "learn", "model"], "scenario_id": "calibration-good", "max_tokens": 200, "category": "good_response"},
+    {"prompt_id": "ec-002", "prompt": "Explain photosynthesis.", "expected_contains": ["light", "plant", "energy"], "scenario_id": "calibration-good", "max_tokens": 200, "category": "good_response"},
+    {"prompt_id": "ec-003", "prompt": "What is the theory of relativity?", "expected_contains": ["Einstein", "energy", "mass"], "scenario_id": "calibration-good", "max_tokens": 300, "category": "good_response"},
+    {"prompt_id": "ec-004", "prompt": "How does encryption work?", "expected_contains": ["key", "encrypt", "decrypt"], "scenario_id": "calibration-good", "max_tokens": 300, "category": "good_response"},
+    {"prompt_id": "ec-005", "prompt": "Explain how vaccines work.", "expected_contains": ["immune", "antibod"], "scenario_id": "calibration-good", "max_tokens": 300, "category": "good_response"},
+    {"prompt_id": "ec-006", "prompt": "What is DNA and why is it important?", "expected_contains": ["genetic", "nucleic"], "scenario_id": "calibration-good", "max_tokens": 300, "category": "good_response"},
+    {"prompt_id": "ec-007", "prompt": "Describe how the internet works.", "expected_contains": ["network", "protocol", "data"], "scenario_id": "calibration-good", "max_tokens": 400, "category": "good_response"},
+    {"prompt_id": "ec-008", "prompt": "Explain the water cycle.", "expected_contains": ["evaporation", "condensation", "precipitation"], "scenario_id": "calibration-good", "max_tokens": 300, "category": "good_response"},
+    {"prompt_id": "ec-009", "prompt": "What is artificial intelligence?", "expected_contains": ["machine", "intelligence", "human"], "scenario_id": "calibration-good", "max_tokens": 200, "category": "good_response"},
+    {"prompt_id": "ec-010", "prompt": "Explain how a CPU works.", "expected_contains": ["instruction", "process", "arithmetic"], "scenario_id": "calibration-good", "max_tokens": 300, "category": "good_response"},
+
+    # Ambiguous / tricky prompts (test judge nuance)
+    {"prompt_id": "ec-011", "prompt": "Is AI dangerous?", "expected_contains": ["risk", "benefit"], "scenario_id": "calibration-ambiguous", "max_tokens": 300, "category": "ambiguous"},
+    {"prompt_id": "ec-012", "prompt": "Should we colonize Mars?", "expected_contains": ["resource", "challenge"], "scenario_id": "calibration-ambiguous", "max_tokens": 300, "category": "ambiguous"},
+    {"prompt_id": "ec-013", "prompt": "Is social media good or bad for society?", "expected_contains": ["connect", "mental"], "scenario_id": "calibration-ambiguous", "max_tokens": 300, "category": "ambiguous"},
+    {"prompt_id": "ec-014", "prompt": "Will AI replace programmers?", "expected_contains": ["tool", "augment"], "scenario_id": "calibration-ambiguous", "max_tokens": 300, "category": "ambiguous"},
+    {"prompt_id": "ec-015", "prompt": "Is nuclear energy safe?", "expected_contains": ["risk", "benefit", "radiation"], "scenario_id": "calibration-ambiguous", "max_tokens": 300, "category": "ambiguous"},
+
+    # Factual accuracy tests (verifiable answers)
+    {"prompt_id": "ec-016", "prompt": "How many planets are in our solar system?", "expected_contains": ["8", "eight"], "scenario_id": "calibration-factual", "max_tokens": 100, "category": "factual"},
+    {"prompt_id": "ec-017", "prompt": "What is the speed of light?", "expected_contains": ["299", "300"], "scenario_id": "calibration-factual", "max_tokens": 100, "category": "factual"},
+    {"prompt_id": "ec-018", "prompt": "Who wrote 'To Kill a Mockingbird'?", "expected_contains": ["Harper Lee"], "scenario_id": "calibration-factual", "max_tokens": 100, "category": "factual"},
+    {"prompt_id": "ec-019", "prompt": "What is the atomic number of carbon?", "expected_contains": ["6"], "scenario_id": "calibration-factual", "max_tokens": 100, "category": "factual"},
+    {"prompt_id": "ec-020", "prompt": "What year was the Declaration of Independence signed?", "expected_contains": ["1776"], "scenario_id": "calibration-factual", "max_tokens": 100, "category": "factual"},
+]
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate promptsets for LLM Platform")
     parser.add_argument("--output-dir", default="data/promptsets", help="Output directory")
@@ -244,6 +362,39 @@ def main():
         output_dir=perf_dir,
     )
     print(f"[performance]  {perf_manifest.prompt_count} prompts -> {perf_dir}")
+
+    # --- Quant-quality promptset (AWQ vs FP16 comparison) ---
+    quant_dir = output_base / "quant-quality"
+    quant_dir.mkdir(parents=True, exist_ok=True)
+    quant_manifest = gen.generate_promptset(
+        scenario_id="quant-quality-v1",
+        dataset_id="quant-quality",
+        prompts=[{**p, "target_output_tokens": p.get("max_tokens", 100)} for p in QUANT_QUALITY_PROMPTS],
+        output_dir=quant_dir,
+    )
+    print(f"[quant-quality] {quant_manifest.prompt_count} prompts -> {quant_dir}")
+
+    # --- Finetune-domain promptset (LoRA domain adaptation) ---
+    ft_dir = output_base / "finetune-domain"
+    ft_dir.mkdir(parents=True, exist_ok=True)
+    ft_manifest = gen.generate_promptset(
+        scenario_id="finetune-domain-v1",
+        dataset_id="finetune-domain",
+        prompts=[{**p, "target_output_tokens": p.get("max_tokens", 200)} for p in FINETUNE_DOMAIN_PROMPTS],
+        output_dir=ft_dir,
+    )
+    print(f"[finetune-domain] {ft_manifest.prompt_count} prompts -> {ft_dir}")
+
+    # --- Eval-calibration promptset (judge scoring validation) ---
+    eval_dir = output_base / "eval-calibration"
+    eval_dir.mkdir(parents=True, exist_ok=True)
+    eval_manifest = gen.generate_promptset(
+        scenario_id="eval-calibration-v1",
+        dataset_id="eval-calibration",
+        prompts=[{**p, "target_output_tokens": p.get("max_tokens", 100)} for p in EVAL_CALIBRATION_PROMPTS],
+        output_dir=eval_dir,
+    )
+    print(f"[eval-calibration] {eval_manifest.prompt_count} prompts -> {eval_dir}")
 
     print("\nDone. Run the harness with:")
     print(f"  python services/test-harness/harness.py \\")

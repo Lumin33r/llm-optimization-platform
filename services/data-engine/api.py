@@ -56,6 +56,8 @@ class HarnessRunSummary(BaseModel):
     failed: int = 0
     pass_rate: float = 0.0
     avg_latency_ms: float = 0.0
+    avg_tokens_per_second: float = 0.0
+    category_breakdown: Optional[Dict] = None
     started_at: str
     completed_at: Optional[str] = None
     errors: List[str] = []
@@ -159,7 +161,18 @@ async def _execute_run(run_id: str, promptset_name: str, team: str,
         passed = sum(1 for r in results if r.passed)
         failed = sum(1 for r in results if not r.passed)
         avg_lat = sum(r.latency_ms for r in results) / len(results) if results else 0
+        avg_tps = sum(r.tokens_per_second for r in results) / len(results) if results else 0
         errors = [f"{r.prompt_id}: {r.error}" for r in results if r.error]
+
+        # Category breakdown
+        categories = {}
+        for r in results:
+            cat = r.category or "uncategorized"
+            if cat not in categories:
+                categories[cat] = {"total": 0, "passed": 0}
+            categories[cat]["total"] += 1
+            if r.passed:
+                categories[cat]["passed"] += 1
 
         _runs[run_id].update({
             "status": "completed",
@@ -168,6 +181,8 @@ async def _execute_run(run_id: str, promptset_name: str, team: str,
             "failed": failed,
             "pass_rate": round(passed / len(results) * 100, 1) if results else 0,
             "avg_latency_ms": round(avg_lat, 1),
+            "avg_tokens_per_second": round(avg_tps, 1),
+            "category_breakdown": categories if categories else None,
             "completed_at": datetime.utcnow().isoformat() + "Z",
             "errors": errors[:20],  # cap at 20
         })

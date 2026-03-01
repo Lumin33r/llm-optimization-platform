@@ -73,9 +73,27 @@ export interface HarnessRunSummary {
   failed: number;
   pass_rate: number;
   avg_latency_ms: number;
+  avg_tokens_per_second: number;
+  category_breakdown?: Record<string, { total: number; passed: number }>;
   started_at: string;
   completed_at?: string;
   errors: string[];
+}
+
+export interface ScoreRequest {
+  prompt: string;
+  response: string;
+  threshold_profile?: string;
+}
+
+export interface ScoreResponse {
+  eval_id: string;
+  coherence: number;
+  helpfulness: number;
+  factuality: number;
+  toxicity: number;
+  pass_threshold: boolean;
+  reasoning?: string;
 }
 
 export class OpsApi {
@@ -135,6 +153,16 @@ export class OpsApi {
 
   async getHarnessRun(runId: string): Promise<HarnessRunSummary> {
     const response = await fetch(`${this.baseUrl}/ops/harness/runs/${runId}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }
+
+  async scoreResponse(request: ScoreRequest): Promise<ScoreResponse> {
+    const response = await fetch(`${this.baseUrl}/ops/score`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.json();
   }

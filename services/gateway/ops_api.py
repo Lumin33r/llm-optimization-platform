@@ -444,6 +444,35 @@ async def get_harness_run(run_id: str):
         raise HTTPException(502, f"Data engine unavailable: {e}")
 
 
+# --------------- Eval Score proxy ---------------
+EVAL_API_URL = os.getenv(
+    "EVAL_API_URL",
+    "http://eval-api.eval.svc.cluster.local:8000"
+)
+
+
+class ScoreRequest(BaseModel):
+    prompt: str
+    response: str
+    threshold_profile: str = "daily-gate-v1"
+
+
+@router.post("/score")
+async def score_response(req: ScoreRequest):
+    """Score a prompt-response pair via the eval-api judge model."""
+    try:
+        async with httpx.AsyncClient(timeout=90) as client:
+            resp = await client.post(
+                f"{EVAL_API_URL}/score",
+                json=req.model_dump()
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as e:
+        logger.error(f"Failed to score: {e}")
+        raise HTTPException(502, f"Eval API unavailable: {e}")
+
+
 # Register router in gateway main.py
 # from ops_api import router as ops_router
 # app.include_router(ops_router)

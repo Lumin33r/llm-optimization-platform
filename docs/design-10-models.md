@@ -4,12 +4,12 @@
 
 This document defines the model infrastructure for the LLM Optimization Platform. The platform runs **4 dedicated vLLM model instances** — one per GPU node — each serving a team-specific purpose:
 
-| Model Variant | Service Name | Team | Model ID | Key vLLM Flags |
-|--------------|-------------|------|----------|----------------|
-| **AWQ** (4-bit quantized) | `mistral-7b-awq` | Quant | `TheBloke/Mistral-7B-Instruct-v0.2-AWQ` | `--quantization awq`, max_len=4096 |
-| **FP16** (full precision) | `mistral-7b-fp16` | Platform (reference) | `mistralai/Mistral-7B-Instruct-v0.2` | `--dtype half`, max_len=1024 |
-| **LoRA** (adapter-enabled) | `mistral-7b-lora` | Finetune | AWQ base + LoRA | `--quantization awq --enable-lora`, max_loras=4 |
-| **Judge** (scoring) | `mistral-7b-judge` | Eval | `TheBloke/Mistral-7B-Instruct-v0.2-AWQ` | `--quantization awq`, max_len=4096 |
+| Model Variant              | Service Name       | Team                 | Model ID                                | Key vLLM Flags                                  |
+| -------------------------- | ------------------ | -------------------- | --------------------------------------- | ----------------------------------------------- |
+| **AWQ** (4-bit quantized)  | `mistral-7b-awq`   | Quant                | `TheBloke/Mistral-7B-Instruct-v0.2-AWQ` | `--quantization awq`, max_len=4096              |
+| **FP16** (full precision)  | `mistral-7b-fp16`  | Platform (reference) | `mistralai/Mistral-7B-Instruct-v0.2`    | `--dtype half`, max_len=1024                    |
+| **LoRA** (adapter-enabled) | `mistral-7b-lora`  | Finetune             | AWQ base + LoRA                         | `--quantization awq --enable-lora`, max_loras=4 |
+| **Judge** (scoring)        | `mistral-7b-judge` | Eval                 | `TheBloke/Mistral-7B-Instruct-v0.2-AWQ` | `--quantization awq`, max_len=4096              |
 
 **Infrastructure**: 4x g4dn.xlarge **SPOT** instances (T4 16GB GPU each), managed via EKS node group with `capacity_type = "SPOT"` (~70% cost savings vs on-demand).
 
@@ -93,13 +93,13 @@ flowchart TB
 
 All 4 model variants run in the `llm-baseline` namespace with **pod anti-affinity** (`model-variant` label) ensuring each model lands on a separate GPU node. The namespace extends the architecture from [design-02-kubernetes.md](design-02-kubernetes.md):
 
-| Namespace       | Purpose                      | Key Workloads                    |
-| --------------- | ---------------------------- | -------------------------------- |
-| `platform`      | Core infrastructure services | Gateway, OTEL Collector sidecar  |
-| `quant`         | Quantization team workloads  | quant-api deployment             |
-| `finetune`      | Fine-tuning team workloads   | finetune-api deployment          |
-| `eval`          | Evaluation team workloads    | eval-api deployment              |
-| `observability` | Monitoring stack             | Grafana, Prometheus, Loki, Tempo |
+| Namespace       | Purpose                          | Key Workloads                               |
+| --------------- | -------------------------------- | ------------------------------------------- |
+| `platform`      | Core infrastructure services     | Gateway, OTEL Collector sidecar             |
+| `quant`         | Quantization team workloads      | quant-api deployment                        |
+| `finetune`      | Fine-tuning team workloads       | finetune-api deployment                     |
+| `eval`          | Evaluation team workloads        | eval-api deployment                         |
+| `observability` | Monitoring stack                 | Grafana, Prometheus, Loki, Tempo            |
 | `llm-baseline`  | **Model inference (4 variants)** | **AWQ, FP16, LoRA, Judge vLLM deployments** |
 
 ---
@@ -120,12 +120,12 @@ All 4 model variants run in the `llm-baseline` namespace with **pod anti-affinit
 
 The platform runs **4 model variants** on Mistral-7B-Instruct-v0.2, each optimized for a team's mission:
 
-| Variant | Model ID | Quantization | VRAM Usage | max_model_len | Team |
-|---------|----------|-------------|-----------|--------------|------|
-| **AWQ** | `TheBloke/Mistral-7B-Instruct-v0.2-AWQ` | AWQ 4-bit | ~4GB | 4096 | Quant |
-| **FP16** | `mistralai/Mistral-7B-Instruct-v0.2` | None (half) | ~14GB | 1024 | Platform (reference) |
-| **LoRA** | AWQ base + `--enable-lora` | AWQ 4-bit | ~5GB | 4096 | Finetune |
-| **Judge** | `TheBloke/Mistral-7B-Instruct-v0.2-AWQ` | AWQ 4-bit | ~4GB | 4096 | Eval |
+| Variant   | Model ID                                | Quantization | VRAM Usage | max_model_len | Team                 |
+| --------- | --------------------------------------- | ------------ | ---------- | ------------- | -------------------- |
+| **AWQ**   | `TheBloke/Mistral-7B-Instruct-v0.2-AWQ` | AWQ 4-bit    | ~4GB       | 4096          | Quant                |
+| **FP16**  | `mistralai/Mistral-7B-Instruct-v0.2`    | None (half)  | ~14GB      | 1024          | Platform (reference) |
+| **LoRA**  | AWQ base + `--enable-lora`              | AWQ 4-bit    | ~5GB       | 4096          | Finetune             |
+| **Judge** | `TheBloke/Mistral-7B-Instruct-v0.2-AWQ` | AWQ 4-bit    | ~4GB       | 4096          | Eval                 |
 
 **Hardware**: 4x g4dn.xlarge SPOT instances (NVIDIA T4 16GB each)
 

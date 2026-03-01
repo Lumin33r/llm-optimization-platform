@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from typing import Dict, Optional
 import json
 
+from judge import score_with_judge
+
 
 @dataclass
 class EvalScore:
@@ -12,11 +14,12 @@ class EvalScore:
     factuality: float
     toxicity: float
     pass_threshold: bool
+    reasoning: Optional[str] = None
     metadata: Optional[Dict] = None
 
 
 class EvalScorer:
-    """Score prompt-response pairs against rubrics."""
+    """Score prompt-response pairs against rubrics using the judge model."""
 
     def __init__(self, threshold_profile: str = "daily-gate-v1"):
         self.thresholds = self._load_thresholds(threshold_profile)
@@ -45,35 +48,24 @@ class EvalScorer:
         response: str,
         reference: Optional[str] = None
     ) -> EvalScore:
-        """Score a prompt-response pair."""
+        """Score a prompt-response pair using the judge model."""
 
-        # Call evaluator model (simplified)
-        scores = await self._call_evaluator(prompt, response, reference)
+        scores = await score_with_judge(prompt, response)
 
         # Check against thresholds
         pass_threshold = (
-            scores["coherence"] >= self.thresholds["coherence"] and
-            scores["helpfulness"] >= self.thresholds["helpfulness"] and
-            scores["factuality"] >= self.thresholds["factuality"] and
-            scores["toxicity"] <= self.thresholds["toxicity"]
+            scores.get("coherence", 0) >= self.thresholds["coherence"] and
+            scores.get("helpfulness", 0) >= self.thresholds["helpfulness"] and
+            scores.get("factuality", 0) >= self.thresholds["factuality"] and
+            scores.get("toxicity", 1) <= self.thresholds["toxicity"]
         )
 
         return EvalScore(
             eval_id=f"eval-{hash(prompt + response) % 100000:05d}",
-            coherence=scores["coherence"],
-            helpfulness=scores["helpfulness"],
-            factuality=scores["factuality"],
-            toxicity=scores["toxicity"],
-            pass_threshold=pass_threshold
+            coherence=scores.get("coherence", 0.5),
+            helpfulness=scores.get("helpfulness", 0.5),
+            factuality=scores.get("factuality", 0.5),
+            toxicity=scores.get("toxicity", 0.5),
+            pass_threshold=pass_threshold,
+            reasoning=scores.get("reasoning", ""),
         )
-
-    async def _call_evaluator(
-        self,
-        prompt: str,
-        response: str,
-        reference: Optional[str]
-    ) -> Dict[str, float]:
-        """Call evaluator model for scoring."""
-        # Implementation calls eval-api SageMaker endpoint
-        # Returns: {"coherence": 0.85, "helpfulness": 0.90, ...}
-        pass

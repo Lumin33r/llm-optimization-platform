@@ -4,7 +4,7 @@ import httpx
 import json
 from datetime import datetime
 from typing import List, Dict, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from contextlib import contextmanager
 
 # Optional OTEL — works without it for local runs
@@ -43,6 +43,16 @@ class HarnessResult:
     latency_ms: float
     error: Optional[str] = None
     response_preview: Optional[str] = None
+    # Phase 7 extended metrics
+    tokens_generated: int = 0
+    tokens_per_second: float = 0.0
+    category: Optional[str] = None
+    model_version: Optional[str] = None
+    quality_scores: Optional[Dict] = None
+    # Phase 8 comparison fields
+    baseline_response: Optional[str] = None
+    baseline_latency_ms: float = 0.0
+    baseline_passed: Optional[bool] = None
 
 
 class TestHarness:
@@ -52,12 +62,16 @@ class TestHarness:
         self,
         gateway_url: str,
         run_id: str,
-        concurrency: int = 10
+        concurrency: int = 10,
+        compare_baseline: bool = False,
+        baseline_team: str = "quant",
     ):
         self.gateway_url = gateway_url
         self.run_id = run_id
         self.concurrency = concurrency
         self.semaphore = asyncio.Semaphore(concurrency)
+        self.compare_baseline = compare_baseline
+        self.baseline_team = baseline_team
 
     async def execute_prompt(
         self,
@@ -107,6 +121,13 @@ class TestHarness:
                     # Validate response
                     passed = self._validate_response(prompt, result)
 
+                    # Extract extended metrics (Phase 7)
+                    response_text = str(result.get("output") or result.get("response", ""))
+                    tokens_generated = result.get("tokens_generated", len(response_text.split()))
+                    tokens_per_second = (tokens_generated / (latency_ms / 1000)) if latency_ms > 0 else 0
+                    model_version = result.get("model_version", "unknown")
+                    category = prompt.get("category")
+
                     # Record metrics
                     labels = {
                         "scenario_id": prompt.get("scenario_id", "unknown"),
@@ -124,6 +145,27 @@ class TestHarness:
                         if HAS_OTEL:
                             harness_fail_total.add(1, labels)
 
+                    # Phase 8: Comparison mode — send same prompt to baseline
+                    baseline_response = None
+                    baseline_latency = 0.0
+                    baseline_passed = None
+                    if self.compare_baseline:
+                        try:
+                            bl_start = asyncio.get_event_loop().time()
+                            async with httpx.AsyncClient(timeout=30.0) as bl_client:
+                                bl_resp = await bl_client.post(
+                                    f"{self.gateway_url}/api/{self.baseline_team}/predict",
+                                    json={"prompt": prompt["prompt"], "max_tokens": prompt.get("max_tokens", 100)},
+                                    headers={"Content-Type": "application/json"},
+                                )
+                                bl_resp.raise_for_status()
+                                bl_result = bl_resp.json()
+                            baseline_latency = (asyncio.get_event_loop().time() - bl_start) * 1000
+                            baseline_response = str(bl_result.get("output") or bl_result.get("response", ""))[:200]
+                            baseline_passed = self._validate_response(prompt, bl_result)
+                        except Exception:
+                            baseline_response = "[baseline error]"
+
                     return HarnessResult(
                         prompt_id=prompt["prompt_id"],
                         scenario_id=prompt.get("scenario_id", "unknown"),
@@ -133,7 +175,14 @@ class TestHarness:
                         variant=variant or "default",
                         passed=passed,
                         latency_ms=latency_ms,
-                        response_preview=str(result.get("response", ""))[:200]
+                        response_preview=response_text[:200],
+                        tokens_generated=tokens_generated,
+                        tokens_per_second=round(tokens_per_second, 1),
+                        category=category,
+                        model_version=model_version,
+                        baseline_response=baseline_response,
+                        baseline_latency_ms=baseline_latency,
+                        baseline_passed=baseline_passed,
                     )
 
                 except Exception as e:
@@ -203,6 +252,8 @@ async def main():
     parser.add_argument("--variant", help="Model variant")
     parser.add_argument("--concurrency", type=int, default=10, help="Concurrent requests")
     parser.add_argument("--run-id", default=datetime.now().strftime("run-%Y%m%d-%H%M%S"))
+    parser.add_argument("--compare-baseline", action="store_true", help="Also send each prompt to baseline for comparison")
+    parser.add_argument("--baseline-team", default="quant", help="Team to use as baseline for comparison")
     args = parser.parse_args()
 
     # Load promptset
@@ -215,7 +266,9 @@ async def main():
     harness = TestHarness(
         gateway_url=args.gateway,
         run_id=args.run_id,
-        concurrency=args.concurrency
+        concurrency=args.concurrency,
+        compare_baseline=args.compare_baseline,
+        baseline_team=args.baseline_team,
     )
 
     results = await harness.run_promptset(prompts, args.team, args.variant)
@@ -224,11 +277,43 @@ async def main():
     passed = sum(1 for r in results if r.passed)
     failed = sum(1 for r in results if not r.passed)
     avg_latency = sum(r.latency_ms for r in results) / len(results) if results else 0
+    avg_tps = sum(r.tokens_per_second for r in results) / len(results) if results else 0
 
+    print(f"\n{'='*60}")
     print(f"Run ID: {args.run_id}")
+    print(f"Team: {args.team} | Variant: {args.variant or 'default'}")
     print(f"Total: {len(results)}, Passed: {passed}, Failed: {failed}")
     print(f"Pass Rate: {passed/len(results)*100:.1f}%")
     print(f"Avg Latency: {avg_latency:.1f}ms")
+    print(f"Avg Tokens/sec: {avg_tps:.1f}")
+
+    # Category breakdown
+    categories = {}
+    for r in results:
+        cat = r.category or "uncategorized"
+        if cat not in categories:
+            categories[cat] = {"total": 0, "passed": 0}
+        categories[cat]["total"] += 1
+        if r.passed:
+            categories[cat]["passed"] += 1
+
+    if any(r.category for r in results):
+        print(f"\nCategory Breakdown:")
+        for cat, stats in sorted(categories.items()):
+            rate = stats["passed"] / stats["total"] * 100 if stats["total"] else 0
+            print(f"  {cat:20s}: {stats['passed']}/{stats['total']} ({rate:.0f}%)")
+
+    # Comparison summary
+    if args.compare_baseline:
+        bl_passed = sum(1 for r in results if r.baseline_passed)
+        bl_avg_lat = sum(r.baseline_latency_ms for r in results) / len(results) if results else 0
+        print(f"\n--- Baseline Comparison ---")
+        print(f"Baseline Pass Rate: {bl_passed/len(results)*100:.1f}%")
+        print(f"Baseline Avg Latency: {bl_avg_lat:.1f}ms")
+        print(f"Delta Pass Rate: {(passed - bl_passed)/len(results)*100:+.1f}%")
+        print(f"Latency Speedup: {bl_avg_lat/avg_latency:.2f}x" if avg_latency > 0 else "")
+
+    print(f"{'='*60}")
 
 
 if __name__ == "__main__":

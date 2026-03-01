@@ -428,12 +428,12 @@ kubectl apply -k k8s/base/llm-baseline/
 
 This creates 4 vLLM deployments with **pod anti-affinity** (one model per GPU node):
 
-| Deployment | Model | Team | Key Config |
-|-----------|-------|------|------------|
-| `mistral-7b-awq` | TheBloke/Mistral-7B-Instruct-v0.2-AWQ | Quant | `--quantization awq`, max_len=4096 |
-| `mistral-7b-fp16` | mistralai/Mistral-7B-Instruct-v0.2 | Platform (ref) | `--dtype half`, max_len=1024 |
-| `mistral-7b-lora` | AWQ base + LoRA | Finetune | `--enable-lora`, max_loras=4 |
-| `mistral-7b-judge` | TheBloke/Mistral-7B-Instruct-v0.2-AWQ | Eval | `--quantization awq`, max_len=4096 |
+| Deployment         | Model                                 | Team           | Key Config                         |
+| ------------------ | ------------------------------------- | -------------- | ---------------------------------- |
+| `mistral-7b-awq`   | TheBloke/Mistral-7B-Instruct-v0.2-AWQ | Quant          | `--quantization awq`, max_len=4096 |
+| `mistral-7b-fp16`  | mistralai/Mistral-7B-Instruct-v0.2    | Platform (ref) | `--dtype half`, max_len=1024       |
+| `mistral-7b-lora`  | AWQ base + LoRA                       | Finetune       | `--enable-lora`, max_loras=4       |
+| `mistral-7b-judge` | TheBloke/Mistral-7B-Instruct-v0.2-AWQ | Eval           | `--quantization awq`, max_len=4096 |
 
 Team services route to their dedicated model via `VLLM_BASE_URL` in their ConfigMaps.
 

@@ -209,6 +209,7 @@ export const HarnessConsole: React.FC<Props> = ({ api }) => {
                 <th>Failed</th>
                 <th>Pass Rate</th>
                 <th>Avg Latency</th>
+                <th>Tok/s</th>
                 <th>Started</th>
               </tr>
             </thead>
@@ -231,11 +232,32 @@ export const HarnessConsole: React.FC<Props> = ({ api }) => {
                   <td style={{ color: run.failed > 0 ? '#ff5555' : '#8e8e8e' }}>{run.failed}</td>
                   <td>{run.pass_rate}%</td>
                   <td>{run.avg_latency_ms.toFixed(0)}ms</td>
+                  <td>{run.avg_tokens_per_second ? run.avg_tokens_per_second.toFixed(1) : '-'}</td>
                   <td>{new Date(run.started_at).toLocaleTimeString()}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+
+          {/* Show category breakdown for completed runs */}
+          {runs.filter(r => r.status === 'completed' && r.category_breakdown).slice(0, 2).map(run => (
+            <div key={`cat-${run.run_id}`} className={styles.errorBox} style={{ background: '#1a2a1a', borderColor: '#224422' }}>
+              <strong style={{ color: '#73bf69' }}>{run.run_id.slice(-10)} — Category Breakdown:</strong>
+              <table className={styles.table} style={{ marginTop: 4 }}>
+                <thead><tr><th>Category</th><th>Passed</th><th>Total</th><th>Rate</th></tr></thead>
+                <tbody>
+                  {Object.entries(run.category_breakdown!).map(([cat, s]) => (
+                    <tr key={cat}>
+                      <td>{cat}</td>
+                      <td style={{ color: '#73bf69' }}>{(s as any).passed}</td>
+                      <td>{(s as any).total}</td>
+                      <td>{((s as any).total > 0 ? ((s as any).passed / (s as any).total * 100).toFixed(0) : 0)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
 
           {/* Show errors for failed runs */}
           {runs.filter(r => r.errors.length > 0).slice(0, 3).map(run => (

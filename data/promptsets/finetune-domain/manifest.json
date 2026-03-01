@@ -1,10 +1,10 @@
 {
-  "promptset_id": "canary-deployment-health-20260301",
-  "scenario_id": "canary-v1",
-  "dataset_id": "canary-deployment-health",
-  "created_at": "2026-03-01T23:19:38.653930Z",
+  "promptset_id": "finetune-domain-20260301",
+  "scenario_id": "finetune-domain-v1",
+  "dataset_id": "finetune-domain",
+  "created_at": "2026-03-01T23:19:38.655767Z",
   "seed": 42,
-  "prompt_count": 50,
+  "prompt_count": 30,
   "expected_output_schema": {
     "format": "text"
   },
@@ -21,7 +21,7 @@
       ]
     }
   },
-  "checksum": "sha256:282c4bf1786a923e0370b9c074416358ceb1d4a91bc0c2525421c6ca01f3707c",
+  "checksum": "sha256:9b8de37b7987a8a9e85c3ce81da559dcef527462640604b0f305f3bd4faad7d8",
   "version": "1.0.0",
   "compatible_harness_version": ">=2.0.0"
 }

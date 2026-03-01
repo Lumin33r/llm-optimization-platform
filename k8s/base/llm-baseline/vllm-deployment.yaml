@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/part-of: llm-optimization-platform
     app.kubernetes.io/component: baseline-inference
 spec:
-  replicas: 1
+  replicas: 0 # Superseded by dedicated model variants (AWQ, FP16, LoRA, Judge)
   strategy:
     type: Recreate # Single GPU — can't run two pods simultaneously
   selector:
