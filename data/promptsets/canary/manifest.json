@@ -1,0 +1,27 @@
+{
+  "promptset_id": "canary-deployment-health-20260301",
+  "scenario_id": "canary-v1",
+  "dataset_id": "canary-deployment-health",
+  "created_at": "2026-03-01T18:19:13.788101Z",
+  "seed": 42,
+  "prompt_count": 50,
+  "expected_output_schema": {
+    "format": "text"
+  },
+  "target_buckets": {
+    "input_tokens": {
+      "min": 10,
+      "max": 500
+    },
+    "output_tokens": {
+      "buckets": [
+        50,
+        200,
+        800
+      ]
+    }
+  },
+  "checksum": "sha256:282c4bf1786a923e0370b9c074416358ceb1d4a91bc0c2525421c6ca01f3707c",
+  "version": "1.0.0",
+  "compatible_harness_version": ">=2.0.0"
+}

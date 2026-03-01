@@ -6,14 +6,29 @@ import uuid
 from typing import Optional
 
 from fastapi import FastAPI, Request, HTTPException, Header
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import httpx
 from opentelemetry import trace
 
 from routing import Router
 from shared.telemetry import setup_telemetry
+from ops_api import router as ops_router
 
 app = FastAPI(title="Gateway API")
+
+# CORS — allow Grafana (localhost:3000) to call the gateway (localhost:8000)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, restrict to your Grafana domain
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Register the ops API router (/ops/services, /ops/health, /ops/stats, /ops/test)
+app.include_router(ops_router)
+
 tracer, meter = setup_telemetry(app, "gateway", "platform")
 
 

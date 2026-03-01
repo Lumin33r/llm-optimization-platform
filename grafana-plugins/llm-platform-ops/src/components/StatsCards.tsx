@@ -1,5 +1,5 @@
 import { css } from '@emotion/css';
-import React from 'react';
+import React, { useState } from 'react';
 import { PlatformStats } from '../api/opsApi';
 
 interface Props {
@@ -8,6 +8,7 @@ interface Props {
 
 export const StatsCards: React.FC<Props> = ({ stats }) => {
   const styles = getStyles();
+  const [showHelp, setShowHelp] = useState(false);
 
   const formatNumber = (n: number): string => {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -17,7 +18,23 @@ export const StatsCards: React.FC<Props> = ({ stats }) => {
 
   return (
     <div className={styles.container}>
-      <h3 className={styles.title}>Platform Stats (24h)</h3>
+      <div className={styles.titleRow}>
+        <h3 className={styles.title}>Platform Stats (24h)</h3>
+        <button className={styles.helpToggle} onClick={() => setShowHelp(!showHelp)} title="Toggle help">{showHelp ? '✕' : '?'}</button>
+      </div>
+      {showHelp && (
+        <div className={styles.helpBox}>
+          <p><strong>Platform Stats</strong> are live metrics queried from Prometheus over the last 24 hours.</p>
+          <ul>
+            <li><strong>Total Requests:</strong> How many inference requests all teams received combined.</li>
+            <li><strong>Error Rate:</strong> Percentage of requests that returned HTTP 5xx errors. Below 1% is healthy.</li>
+            <li><strong>P50 Latency:</strong> Median response time &mdash; 50% of requests were faster than this.</li>
+            <li><strong>P95 Latency:</strong> 95th percentile &mdash; only 5% of requests were slower. Used for SLA targets.</li>
+            <li><strong>P99 Latency:</strong> 99th percentile &mdash; the "worst-case" tail latency experienced by 1 in 100 users.</li>
+          </ul>
+          <p><strong>Requests by Team</strong> breaks down traffic per gateway route to show which team is generating the most load.</p>
+        </div>
+      )}
       <div className={styles.grid}>
         <div className={styles.card}>
           <span className={styles.label}>Total Requests</span>
@@ -56,9 +73,44 @@ export const StatsCards: React.FC<Props> = ({ stats }) => {
 
 const getStyles = () => ({
   container: css``,
+  titleRow: css`
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  `,
   title: css`
-    margin-bottom: 12px;
     font-size: 14px;
+    margin: 0;
+  `,
+  helpToggle: css`
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid #555;
+    background: #333;
+    color: #aaa;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    &:hover { background: #444; color: #fff; }
+  `,
+  helpBox: css`
+    background: #1a2233;
+    border: 1px solid #2a3a55;
+    border-radius: 4px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #c8d0dd;
+    p { margin: 0 0 6px; }
+    ul { margin: 4px 0 6px 16px; padding: 0; }
+    li { margin-bottom: 2px; }
+    code { background: #2a3a55; padding: 1px 5px; border-radius: 3px; font-size: 11px; }
   `,
   subtitle: css`
     margin-top: 16px;

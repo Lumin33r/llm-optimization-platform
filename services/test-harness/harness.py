@@ -5,29 +5,30 @@ import json
 from datetime import datetime
 from typing import List, Dict, Optional
 from dataclasses import dataclass
-from opentelemetry import trace, metrics
-from opentelemetry.propagate import inject
+from contextlib import contextmanager
 
-tracer = trace.get_tracer("test-harness")
-meter = metrics.get_meter("test-harness")
+# Optional OTEL — works without it for local runs
+try:
+    from opentelemetry import trace, metrics
+    from opentelemetry.propagate import inject as otel_inject
+    tracer = trace.get_tracer("test-harness")
+    meter = metrics.get_meter("test-harness")
+    harness_requests_total = meter.create_counter("lab_harness_requests_total", description="Total harness requests")
+    harness_pass_total = meter.create_counter("lab_harness_pass_total", description="Total passed validations")
+    harness_fail_total = meter.create_counter("lab_harness_fail_total", description="Total failed validations")
+    harness_latency = meter.create_histogram("lab_harness_latency_ms", description="Request latency")
+    HAS_OTEL = True
+except ImportError:
+    HAS_OTEL = False
+    tracer = None
 
-# Metrics
-harness_requests_total = meter.create_counter(
-    "lab_harness_requests_total",
-    description="Total harness requests"
-)
-harness_pass_total = meter.create_counter(
-    "lab_harness_pass_total",
-    description="Total passed validations"
-)
-harness_fail_total = meter.create_counter(
-    "lab_harness_fail_total",
-    description="Total failed validations"
-)
-harness_latency = meter.create_histogram(
-    "lab_harness_latency_ms",
-    description="Request latency"
-)
+    @contextmanager
+    def _noop_span(name):
+        class _Span:
+            def set_attribute(self, k, v): pass
+        yield _Span()
+
+    def otel_inject(headers): pass
 
 
 @dataclass
@@ -67,7 +68,8 @@ class TestHarness:
         """Execute single prompt with telemetry."""
 
         async with self.semaphore:
-            with tracer.start_as_current_span("harness.execute") as span:
+            span_ctx = tracer.start_as_current_span("harness.execute") if HAS_OTEL else _noop_span("harness.execute")
+            with span_ctx as span:
                 # Set span attributes
                 span.set_attribute("lab.promptset.id", prompt.get("dataset_id", "unknown"))
                 span.set_attribute("lab.scenario.id", prompt.get("scenario_id", "unknown"))
@@ -81,7 +83,7 @@ class TestHarness:
 
                 # Prepare headers with trace propagation
                 headers = {"Content-Type": "application/json"}
-                inject(headers)
+                otel_inject(headers)
 
                 # Add routing headers
                 headers["X-Target-Team"] = team
@@ -93,7 +95,7 @@ class TestHarness:
                 try:
                     async with httpx.AsyncClient(timeout=30.0) as client:
                         response = await client.post(
-                            f"{self.gateway_url}/predict",
+                            f"{self.gateway_url}/api/{team}/predict",
                             json={"prompt": prompt["prompt"], "max_tokens": prompt.get("max_tokens", 100)},
                             headers=headers
                         )
@@ -111,13 +113,16 @@ class TestHarness:
                         "team": team,
                         "bucket": prompt.get("bucket", "unknown")
                     }
-                    harness_requests_total.add(1, labels)
-                    harness_latency.record(latency_ms, labels)
+                    if HAS_OTEL:
+                        harness_requests_total.add(1, labels)
+                        harness_latency.record(latency_ms, labels)
 
                     if passed:
-                        harness_pass_total.add(1, labels)
+                        if HAS_OTEL:
+                            harness_pass_total.add(1, labels)
                     else:
-                        harness_fail_total.add(1, labels)
+                        if HAS_OTEL:
+                            harness_fail_total.add(1, labels)
 
                     return HarnessResult(
                         prompt_id=prompt["prompt_id"],
@@ -136,7 +141,7 @@ class TestHarness:
                     span.set_attribute("error.type", type(e).__name__)
                     span.set_attribute("error.message", str(e)[:200])
 
-                    harness_fail_total.add(1, {"scenario_id": prompt.get("scenario_id", "unknown"), "team": team})
+                    harness_fail_total.add(1, {"scenario_id": prompt.get("scenario_id", "unknown"), "team": team}) if HAS_OTEL else None
 
                     return HarnessResult(
                         prompt_id=prompt["prompt_id"],
@@ -152,12 +157,14 @@ class TestHarness:
 
     def _validate_response(self, prompt: Dict, result: Dict) -> bool:
         """Validate response against expected criteria."""
-        response_text = str(result.get("response", "")).lower()
+        # Gateway returns "output", fall back to "response" for compatibility
+        response_text = str(result.get("output") or result.get("response", "")).lower()
 
-        # Check expected_contains
-        if "expected_contains" in prompt:
-            for expected in prompt["expected_contains"]:
-                if expected.lower() not in response_text:
+        # Check expected_contains (skip if None or missing)
+        expected = prompt.get("expected_contains")
+        if expected:
+            for term in expected:
+                if term.lower() not in response_text:
                     return False
 
         # Check expected_format

@@ -1,4 +1,5 @@
 const path = require('path');
+const CopyPlugin = require('copy-webpack-plugin');
 
 module.exports = {
   entry: './src/module.ts',
@@ -10,6 +11,13 @@ module.exports = {
     },
     clean: true,
   },
+  plugins: [
+    new CopyPlugin({
+      patterns: [
+        { from: 'src/plugin.json', to: 'plugin.json' },
+      ],
+    }),
+  ],
   externals: [
     'react',
     'react-dom',

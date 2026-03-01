@@ -145,3 +145,36 @@ data:
       "title": "LLM Platform Overview",
       "uid": "llm-platform-overview"
     }
+  llm-operations.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "id": null,
+      "links": [],
+      "panels": [
+        {
+          "id": 1,
+          "title": "LLM Platform Operations",
+          "type": "llmplatform-ops-panel",
+          "gridPos": { "h": 24, "w": 24, "x": 0, "y": 0 },
+          "options": {
+            "gatewayUrl": "http://localhost:8000",
+            "refreshInterval": 30
+          },
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "datasource": null,
+          "targets": []
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["llm", "operations"],
+      "templating": { "list": [] },
+      "time": { "from": "now-1h", "to": "now" },
+      "title": "LLM Operations Console",
+      "uid": "llm-operations-console"
+    }

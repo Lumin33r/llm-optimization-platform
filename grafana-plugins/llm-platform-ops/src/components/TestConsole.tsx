@@ -2,6 +2,7 @@ import { css } from '@emotion/css';
 import React, { useState } from 'react';
 import { OpsApi, TestResponse } from '../api/opsApi';
 
+
 interface Props {
   api: OpsApi;
 }
@@ -13,6 +14,7 @@ export const TestConsole: React.FC<Props> = ({ api }) => {
   const [prompt, setPrompt] = useState('Test health check prompt');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<TestResponse | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
 
   const runTest = async () => {
     setLoading(true);
@@ -49,7 +51,23 @@ export const TestConsole: React.FC<Props> = ({ api }) => {
 
   return (
     <div className={styles.container}>
-      <h3 className={styles.title}>Test Console</h3>
+      <div className={styles.titleRow}>
+        <h3 className={styles.title}>Test Console</h3>
+        <button className={styles.helpToggle} onClick={() => setShowHelp(!showHelp)} title="Toggle help">{showHelp ? '✕' : '?'}</button>
+      </div>
+      {showHelp && (
+        <div className={styles.helpBox}>
+          <p><strong>Test Console</strong> sends a single prompt to the LLM through the gateway and shows the raw response.</p>
+          <ul>
+            <li><strong>Team:</strong> Which service route to use (<code>/api/quant/predict</code>, etc). All routes currently point to the same vLLM model.</li>
+            <li><strong>Prompt:</strong> The text sent to the model for inference. The model generates a completion based on this input.</li>
+            <li><strong>Status:</strong> <span style={{color:'#73bf69'}}>SUCCESS</span> = model responded, <span style={{color:'#ff9830'}}>TIMEOUT</span> = response took too long, <span style={{color:'#ff5555'}}>ERROR</span> = request failed.</li>
+            <li><strong>Latency:</strong> Round-trip time in milliseconds from request to response. Includes network + GPU inference time.</li>
+            <li><strong>Correlation ID:</strong> A unique UUID for this request &mdash; use it to trace the request through gateway logs and Prometheus metrics.</li>
+          </ul>
+          <p>This is useful for quick smoke tests: "Is the model responding? How fast? What does the output look like?"</p>
+        </div>
+      )}
 
       <div className={styles.form}>
         <div className={styles.field}>
@@ -110,9 +128,44 @@ export const TestConsole: React.FC<Props> = ({ api }) => {
 
 const getStyles = () => ({
   container: css``,
+  titleRow: css`
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  `,
   title: css`
-    margin-bottom: 12px;
     font-size: 14px;
+    margin: 0;
+  `,
+  helpToggle: css`
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid #555;
+    background: #333;
+    color: #aaa;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    &:hover { background: #444; color: #fff; }
+  `,
+  helpBox: css`
+    background: #1a2233;
+    border: 1px solid #2a3a55;
+    border-radius: 4px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #c8d0dd;
+    p { margin: 0 0 6px; }
+    ul { margin: 4px 0 6px 16px; padding: 0; }
+    li { margin-bottom: 2px; }
+    code { background: #2a3a55; padding: 1px 5px; border-radius: 3px; font-size: 11px; }
   `,
   form: css`
     display: flex;

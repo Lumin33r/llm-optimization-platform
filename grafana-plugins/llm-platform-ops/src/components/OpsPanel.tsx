@@ -1,8 +1,9 @@
 import { css } from '@emotion/css';
 import { PanelProps } from '@grafana/data';
 import { useStyles2 } from '@grafana/ui';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { HealthStatus, OpsApi, PlatformStats, ServiceInfo } from '../api/opsApi';
+import { HarnessConsole } from './HarnessConsole';
 import { HealthOverview } from './HealthOverview';
 import { ServicesTable } from './ServicesTable';
 import { StatsCards } from './StatsCards';
@@ -24,7 +25,7 @@ export const OpsPanel: React.FC<Props> = ({ options, width, height }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const api = new OpsApi(options.gatewayUrl);
+  const api = useMemo(() => new OpsApi(options.gatewayUrl), [options.gatewayUrl]);
 
   // Fetch data on mount and at interval
   useEffect(() => {
@@ -85,6 +86,10 @@ export const OpsPanel: React.FC<Props> = ({ options, width, height }) => {
 
         <div className={styles.fullWidth}>
           <TestConsole api={api} />
+        </div>
+
+        <div className={styles.fullWidth}>
+          <HarnessConsole api={api} />
         </div>
       </div>
     </div>

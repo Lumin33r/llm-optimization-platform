@@ -42,6 +42,42 @@ export interface TestResponse {
   error?: string;
 }
 
+// --- Data Engine / Harness types ---
+
+export interface PromptsetInfo {
+  promptset_id: string;
+  scenario_id: string;
+  dataset_id: string;
+  prompt_count: number;
+  created_at: string;
+  version: string;
+  checksum: string;
+}
+
+export interface HarnessRunRequest {
+  promptset: string;
+  team: string;
+  variant?: string;
+  concurrency: number;
+  max_prompts?: number;
+}
+
+export interface HarnessRunSummary {
+  run_id: string;
+  status: "pending" | "running" | "completed" | "failed";
+  promptset: string;
+  team: string;
+  variant?: string;
+  total: number;
+  passed: number;
+  failed: number;
+  pass_rate: number;
+  avg_latency_ms: number;
+  started_at: string;
+  completed_at?: string;
+  errors: string[];
+}
+
 export class OpsApi {
   constructor(private baseUrl: string) {}
 
@@ -69,6 +105,36 @@ export class OpsApi {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(request),
     });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }
+
+  // --- Data Engine / Harness methods ---
+
+  async getPromptsets(): Promise<PromptsetInfo[]> {
+    const response = await fetch(`${this.baseUrl}/ops/promptsets`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }
+
+  async startHarnessRun(request: HarnessRunRequest): Promise<HarnessRunSummary> {
+    const response = await fetch(`${this.baseUrl}/ops/harness/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }
+
+  async getHarnessRuns(): Promise<HarnessRunSummary[]> {
+    const response = await fetch(`${this.baseUrl}/ops/harness/runs`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }
+
+  async getHarnessRun(runId: string): Promise<HarnessRunSummary> {
+    const response = await fetch(`${this.baseUrl}/ops/harness/runs/${runId}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.json();
   }

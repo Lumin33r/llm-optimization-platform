@@ -182,6 +182,7 @@ export AWS_DEFAULT_REGION="us-west-2"
 # Option B: AWS SSO
 aws sso login --profile <your-profile>
 export AWS_PROFILE=<your-profile>
+
 ```
 
 ### 1.2 Review and customize variables
@@ -308,7 +309,7 @@ Expected namespaces: `platform`, `quant`, `finetune`, `eval`, `observability`, `
 ### 2.1 Apply all base manifests
 
 ```bash
-cd k8s/
+up 3 && cd k8s/
 
 # Apply the full base (namespaces + all services except images won't resolve yet)
 kubectl apply -k base/
@@ -450,6 +451,9 @@ Resource requirements per pod:
 ### 4.4 Wait for the model to load
 
 ```bash
+# Watch in terminal
+kubectl get pods -n llm-baseline -w
+
 # This can take 3-5 minutes (model download + GPU load)
 kubectl wait --for=condition=ready pod \
   -l app=mistral-7b-instruct-vllm \

@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-engine
+  namespace: platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: data-engine
+  template:
+    metadata:
+      labels:
+        app: data-engine
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+    spec:
+      serviceAccountName: gateway-sa
+      containers:
+        - name: data-engine
+          image: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/data-engine:dev-latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          env:
+            - name: GATEWAY_URL
+              value: "http://gateway.platform.svc.cluster.local:8000"
+            - name: DATA_DIR
+              value: "/app/data/promptsets"
+            - name: SERVICE_VERSION
+              value: "1.0.0"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 30

@@ -1223,3 +1223,114 @@ After the 3rd and 4th nodes joined, Tempo scheduled immediately. Prometheus requ
 - `infra/envs/dev/terraform.tfvars`
 
 **Note:** Run `terraform apply` in `infra/envs/dev/` to sync state with the live node group scaling.
+
+---
+
+## 31. Grafana Plugin: emptyDir Volume Shadowing Baked-In Files
+
+**Symptom:** No plugin found despite custom image having plugin files.
+**Root Cause:** emptyDir volume mounted to /var/lib/grafana/plugins shadowed baked-in files.
+**Fix:** Removed emptyDir volume and volumeMount.
+**Files:** k8s/base/observability/grafana-deployment.yaml
+
+---
+
+## 32. Grafana Plugin: Unsigned Plugin Rejected
+
+**Symptom:** Plugin signature missing error.
+**Fix:** Added GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS env var.
+**Files:** k8s/base/observability/grafana-deployment.yaml, grafana-plugins/Dockerfile
+
+---
+
+## 33. Grafana Plugin: Browser DNS Resolution Failure
+
+**Symptom:** Browser cannot resolve gateway.platform.svc.cluster.local.
+**Fix:** Changed default gatewayUrl to http://localhost:8000.
+**Files:** grafana-plugins/llm-platform-ops/src/module.ts
+
+---
+
+## 34. Gateway: Missing Ops Router Registration
+
+**Symptom:** /ops/* returns 404.
+**Fix:** Added app.include_router(ops_router) to main.py.
+**Files:** services/gateway/main.py
+
+---
+
+## 35. Gateway: CORS Blocking Grafana Requests
+
+**Symptom:** CORS preflight failures.
+**Fix:** Added CORSMiddleware with allow_origins=["*"].
+**Files:** services/gateway/main.py
+
+---
+
+## 36. Gateway: Circular Import Crash
+
+**Symptom:** ImportError on startup.
+**Fix:** Lazy import pattern in ops_api.py.
+**Files:** services/gateway/ops_api.py
+
+---
+
+## 37. Prometheus: TSDB Lock Conflict
+
+**Symptom:** Lock DB directory error during rolling update.
+**Fix:** Changed strategy to Recreate.
+**Files:** k8s/base/observability/prometheus-deployment.yaml
+
+---
+
+## 38. Prometheus: No Pod Auto-Discovery
+
+**Symptom:** No custom metrics from pods.
+**Fix:** Added kubernetes-pods scrape job.
+**Files:** k8s/base/observability/prometheus-config.yaml
+
+---
+
+## 39. Team Services: Missing Version Field
+
+**Symptom:** version unknown in /ops/services.
+**Fix:** Added version to health endpoints.
+**Files:** services/quant-api/main.py, services/finetune-api/main.py, services/eval-api/main.py
+
+---
+
+## 40. Data-Engine: Image Tag Mismatch
+
+**Symptom:** ErrImagePull.
+**Fix:** Changed :latest to :dev-latest.
+**Files:** k8s/base/data-engine/deployment.yaml
+
+---
+
+## 41. Test Harness: Wrong Predict URL
+
+**Fix:** Changed /predict to /api/{team}/predict.
+**Files:** services/test-harness/harness.py
+
+---
+
+## 42. Test Harness: Hard OTEL Dependency
+
+**Fix:** Made OTEL optional with try/except + _noop_span fallback.
+**Files:** services/test-harness/harness.py
+
+---
+
+## Final State (Post-Phase-8)
+
+| Service | Namespace | Status | Image Tag |
+|---------|-----------|--------|-----------|
+| gateway | platform | Running | dev-latest |
+| data-engine | platform | Running | dev-latest |
+| quant-api | quant | Running | dev-latest |
+| finetune-api | finetune | Running | dev-latest |
+| eval-api | eval | Running | dev-latest |
+| grafana | observability | Running | dev-latest |
+| prometheus | observability | Running | v2.49.0 |
+
+**New endpoints:** GET /ops/promptsets, POST /ops/harness/run, GET /ops/harness/runs, GET /ops/harness/runs/{run_id}

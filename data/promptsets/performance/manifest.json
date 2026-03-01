@@ -1,0 +1,27 @@
+{
+  "promptset_id": "performance-throughput-20260301",
+  "scenario_id": "performance-v1",
+  "dataset_id": "performance-throughput",
+  "created_at": "2026-03-01T18:19:13.788870Z",
+  "seed": 42,
+  "prompt_count": 100,
+  "expected_output_schema": {
+    "format": "text"
+  },
+  "target_buckets": {
+    "input_tokens": {
+      "min": 10,
+      "max": 500
+    },
+    "output_tokens": {
+      "buckets": [
+        50,
+        200,
+        800
+      ]
+    }
+  },
+  "checksum": "sha256:d2770d59db42b101ce222a2aa41f71886e703fef279c395896ff7c7982dfd319",
+  "version": "1.0.0",
+  "compatible_harness_version": ">=2.0.0"
+}

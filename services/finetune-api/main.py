@@ -81,7 +81,7 @@ async def startup():
 async def health():
     """Liveness probe - returns 200 if process is alive."""
     if await app.state.health.liveness_check():
-        return {"status": "healthy", "service": "finetune-api"}
+        return {"status": "healthy", "service": "finetune-api", "version": os.getenv("SERVICE_VERSION", "1.0.0")}
     raise HTTPException(status_code=500, detail="Service unhealthy")
 
 
