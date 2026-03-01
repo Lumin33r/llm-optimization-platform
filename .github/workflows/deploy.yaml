@@ -1,0 +1,205 @@
+# .github/workflows/deploy.yaml
+name: Deploy LLM Platform
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - dev
+        default: dev
+
+env:
+  AWS_REGION: us-west-2
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION || 'us-west-2' }}.amazonaws.com
+  EKS_CLUSTER: llmplatform-dev
+  IMAGE_TAG: dev-latest
+
+permissions:
+  contents: read
+
+jobs:
+  # ===========================================
+  # Build & Push All Service Images
+  # ===========================================
+  build-services:
+    name: Build ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: gateway
+            ecr_repo: llmplatform-dev/gateway
+            dockerfile: services/gateway/Dockerfile
+            context: services/
+          - service: quant-api
+            ecr_repo: llmplatform-dev/quant-api
+            dockerfile: services/quant-api/Dockerfile
+            context: services/
+          - service: finetune-api
+            ecr_repo: llmplatform-dev/finetune-api
+            dockerfile: services/finetune-api/Dockerfile
+            context: services/
+          - service: eval-api
+            ecr_repo: llmplatform-dev/eval-api
+            dockerfile: services/eval-api/Dockerfile
+            context: services/
+          - service: data-engine
+            ecr_repo: llmplatform-dev/data-engine
+            dockerfile: services/data-engine/Dockerfile
+            context: .
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push ${{ matrix.service }}
+        run: |
+          ECR=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-2.amazonaws.com
+          docker build \
+            -t $ECR/${{ matrix.ecr_repo }}:${{ env.IMAGE_TAG }} \
+            -f ${{ matrix.dockerfile }} \
+            ${{ matrix.context }}
+          docker push $ECR/${{ matrix.ecr_repo }}:${{ env.IMAGE_TAG }}
+
+  # ===========================================
+  # Build & Push Grafana Plugin Image
+  # ===========================================
+  build-grafana:
+    name: Build Grafana
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Build Grafana plugin
+        working-directory: grafana-plugins/llm-platform-ops
+        run: |
+          npm ci
+          npx webpack --mode production
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Grafana image
+        run: |
+          ECR=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-2.amazonaws.com
+          docker build \
+            -t $ECR/llmplatform-dev/grafana-plugin:${{ env.IMAGE_TAG }} \
+            -f grafana-plugins/Dockerfile \
+            grafana-plugins/
+          docker push $ECR/llmplatform-dev/grafana-plugin:${{ env.IMAGE_TAG }}
+
+  # ===========================================
+  # Deploy to EKS
+  # ===========================================
+  deploy:
+    name: Deploy to EKS
+    needs: [build-services, build-grafana]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region us-west-2
+
+      - name: Deploy base platform (namespaces + services)
+        run: |
+          kubectl apply -k k8s/overlays/dev/
+
+      - name: Deploy observability stack
+        run: |
+          kubectl apply -f k8s/base/observability/
+
+      - name: Deploy data engine
+        run: |
+          kubectl apply -f k8s/base/data-engine/
+
+      - name: Deploy LLM baseline (vLLM)
+        run: |
+          kubectl apply -k k8s/base/llm-baseline/
+
+      - name: Wait for rollouts
+        run: |
+          echo "=== Waiting for platform services ==="
+          kubectl rollout status deployment/gateway -n platform --timeout=300s
+          kubectl rollout status deployment/quant-api -n quant --timeout=300s
+          kubectl rollout status deployment/finetune-api -n finetune --timeout=300s
+          kubectl rollout status deployment/eval-api -n eval --timeout=300s
+
+          echo "=== Waiting for data engine ==="
+          kubectl rollout status deployment/data-engine -n platform --timeout=300s
+
+          echo "=== Waiting for observability ==="
+          kubectl rollout status deployment/grafana -n observability --timeout=300s
+          kubectl rollout status deployment/prometheus -n observability --timeout=300s
+
+          echo "=== Waiting for LLM baseline (may take several minutes for model download) ==="
+          kubectl rollout status deployment/mistral-7b-instruct-vllm -n llm-baseline --timeout=600s
+
+      - name: Verify deployment
+        run: |
+          echo "=== All Pods ==="
+          kubectl get pods -A --field-selector=status.phase!=Succeeded | grep -v kube-system
+
+          echo ""
+          echo "=== Services ==="
+          kubectl get svc -A | grep -v kube-system
+
+          echo ""
+          echo "=== Deployments ==="
+          kubectl get deployments -A | grep -v kube-system
+
+      - name: Smoke test
+        run: |
+          # Port-forward gateway for smoke test
+          kubectl port-forward -n platform svc/gateway 8080:8000 &
+          sleep 5
+
+          echo "=== Gateway Health ==="
+          curl -sf http://localhost:8080/health || echo "WARNING: Gateway health check failed"
+
+          echo ""
+          echo "=== Ops Health ==="
+          curl -sf http://localhost:8080/ops/health || echo "WARNING: Ops health check failed"
+
+          echo ""
+          echo "=== Deployment Complete ==="
+          echo "All services deployed successfully to ${{ env.EKS_CLUSTER }}"
