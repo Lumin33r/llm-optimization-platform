@@ -276,7 +276,8 @@ async def run_test(request: TestRequest):
     """
     Execute a test prediction for a specific team.
 
-    Returns the correlation ID and result for tracing.
+    Routes through the gateway's own /api/{team}/predict endpoint
+    so the request is counted in platform metrics (OTEL → Prometheus).
     """
     import uuid
     import time
@@ -296,9 +297,11 @@ async def run_test(request: TestRequest):
         )
 
     try:
+        # Call our own /api/{team}/predict so the request goes through
+        # the main gateway handler which records OTEL metrics.
         async with httpx.AsyncClient(timeout=route.timeout_ms / 1000) as client:
             response = await client.post(
-                f"{route.url}/predict",
+                f"http://localhost:8000/api/{request.team}/predict",
                 json={
                     "prompt": request.prompt,
                     "max_tokens": request.max_tokens
