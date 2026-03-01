@@ -174,6 +174,30 @@ jobs:
           echo "=== Waiting for LLM baseline (may take several minutes for model download) ==="
           kubectl rollout status deployment/mistral-7b-instruct-vllm -n llm-baseline --timeout=600s
 
+      - name: Patch dashboard with public gateway URL
+        run: |
+          echo "Waiting for Gateway LoadBalancer hostname..."
+          for i in $(seq 1 30); do
+            GW_HOST=$(kubectl get svc gateway -n platform -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+            if [ -n "$GW_HOST" ]; then
+              echo "Gateway LB: $GW_HOST"
+              break
+            fi
+            echo "  Attempt $i/30 — waiting 10s..."
+            sleep 10
+          done
+
+          if [ -n "$GW_HOST" ]; then
+            echo "Patching dashboard ConfigMap with gateway URL..."
+            sed -i "s|http://localhost:8000|http://${GW_HOST}:8000|g" k8s/base/observability/grafana-dashboards.yaml
+            kubectl apply -f k8s/base/observability/grafana-dashboards.yaml
+            kubectl rollout restart deployment grafana -n observability
+            kubectl rollout status deployment grafana -n observability --timeout=120s
+            echo "Dashboard patched with public gateway URL"
+          else
+            echo "WARNING: Gateway LB not ready — dashboard will use localhost:8000"
+          fi
+
       - name: Verify deployment
         run: |
           echo "=== All Pods ==="
@@ -204,24 +228,27 @@ jobs:
           echo "=== Deployment Complete ==="
           echo "All services deployed successfully to ${{ env.EKS_CLUSTER }}"
 
-      - name: Get Grafana public URL
+      - name: Print public access URLs
         run: |
-          echo "Waiting for Grafana LoadBalancer to get an external address..."
-          for i in $(seq 1 30); do
-            HOSTNAME=$(kubectl get svc grafana -n observability -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
-            IP=$(kubectl get svc grafana -n observability -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
-            ADDR=${HOSTNAME:-$IP}
-            if [ -n "$ADDR" ]; then
-              echo ""
-              echo "========================================"
-              echo "  Grafana is available at:"
-              echo "  http://${ADDR}:3000"
-              echo "  Login: admin / admin"
-              echo "========================================"
-              exit 0
-            fi
-            echo "  Attempt $i/30 — not ready yet, waiting 10s..."
-            sleep 10
-          done
-          echo "WARNING: LoadBalancer address not assigned after 5 minutes"
-          kubectl get svc grafana -n observability -o yaml
+          GRAFANA_HOST=$(kubectl get svc grafana -n observability -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+          GATEWAY_HOST=$(kubectl get svc gateway -n platform -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+
+          echo ""
+          echo "========================================================"
+          echo "  DEPLOYMENT COMPLETE"
+          echo "========================================================"
+          if [ -n "$GRAFANA_HOST" ]; then
+            echo "  Grafana:  http://${GRAFANA_HOST}:3000"
+            echo "  Login:    admin / admin"
+          else
+            echo "  Grafana:  LoadBalancer pending (check kubectl get svc -n observability)"
+          fi
+          echo ""
+          if [ -n "$GATEWAY_HOST" ]; then
+            echo "  Gateway:  http://${GATEWAY_HOST}:8000"
+            echo "  Health:   http://${GATEWAY_HOST}:8000/health"
+            echo "  Ops API:  http://${GATEWAY_HOST}:8000/ops/health"
+          else
+            echo "  Gateway:  LoadBalancer pending (check kubectl get svc -n platform)"
+          fi
+          echo "========================================================"

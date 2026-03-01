@@ -160,7 +160,7 @@ data:
           "type": "llmplatform-ops-panel",
           "gridPos": { "h": 24, "w": 24, "x": 0, "y": 0 },
           "options": {
-            "gatewayUrl": "http://localhost:8000",
+            "gatewayUrl": "http://a4df255d6ad934069b983480dc4e5781-195795543.us-west-2.elb.amazonaws.com:8000",
             "refreshInterval": 30
           },
           "fieldConfig": {
