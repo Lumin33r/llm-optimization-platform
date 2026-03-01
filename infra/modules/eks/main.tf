@@ -102,6 +102,7 @@ resource "aws_eks_node_group" "main" {
   subnet_ids      = var.private_subnet_ids
   instance_types  = each.value.instance_types
   ami_type        = each.value.ami_type
+  capacity_type   = each.value.capacity_type
   disk_size       = each.value.disk_size
 
   scaling_config {

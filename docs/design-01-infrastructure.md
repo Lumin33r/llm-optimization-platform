@@ -429,6 +429,8 @@ resource "aws_eks_node_group" "main" {
   node_role_arn   = aws_iam_role.nodes.arn
   subnet_ids      = var.private_subnet_ids
   instance_types  = each.value.instance_types
+  ami_type        = each.value.ami_type
+  capacity_type   = each.value.capacity_type  # ON_DEMAND or SPOT
   disk_size       = each.value.disk_size
 
   scaling_config {

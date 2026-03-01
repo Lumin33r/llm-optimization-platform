@@ -89,7 +89,7 @@ kubectl get deployments -A -l app.kubernetes.io/part-of=llm-optimization-platfor
 | `observability` | Monitoring stack             | Grafana, Prometheus, Loki, Tempo |
 | `llm-baseline`  | Baseline model inference     | vLLM deployment (Mistral-7B)     |
 
-> **Note**: The `llm-baseline` namespace is defined in [design-10-models.md](design-10-models.md). All teams access this shared baseline model for comparisons and A/B testing.
+> **Note**: The `llm-baseline` namespace hosts 4 vLLM model variants on dedicated SPOT GPU nodes. Each team has its own model endpoint (AWQ, LoRA, Judge) with pod anti-affinity ensuring one model per node. See [design-10-models.md](design-10-models.md) for details.
 
 ---
 

@@ -73,7 +73,7 @@ module "ecr" {
 
   project          = var.project
   environment      = var.environment
-  repository_names = ["gateway", "quant-api", "finetune-api", "eval-api", "grafana-plugin"]
+  repository_names = ["gateway", "quant-api", "finetune-api", "eval-api", "grafana-plugin", "data-engine"]
   tags             = local.tags
 }
 

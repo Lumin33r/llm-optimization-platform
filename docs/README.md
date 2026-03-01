@@ -9,7 +9,7 @@
 - [Phase 1 — Provision Infrastructure (Terraform)](#phase-1--provision-infrastructure-terraform)
 - [Phase 2 — Deploy Kubernetes Base (Kustomize)](#phase-2--deploy-kubernetes-base-kustomize)
 - [Phase 3 — Deploy the Observability Stack](#phase-3--deploy-the-observability-stack)
-- [Phase 4 — Deploy the Baseline Model (vLLM / Mistral-7B-AWQ)](#phase-4--deploy-the-baseline-model-vllm--mistral-7b-awq)
+- [Phase 4 — Deploy the Model Fleet (vLLM / Mistral-7B × 4 variants)](#phase-4--deploy-the-model-fleet-vllm--mistral-7b--4-variants)
 - [Phase 5 — Build & Deploy Application Services](#phase-5--build--deploy-application-services)
 - [Phase 6 — First End-to-End Request](#phase-6--first-end-to-end-request)
 - [Phase 7 — Grafana Plugin & Dashboard](#phase-7--grafana-plugin--dashboard)
@@ -34,7 +34,7 @@ A multi-team platform for optimizing LLM inference on AWS EKS, supporting three 
 | **FineTune** | LoRA adapters        | `finetune-endpoint` | Fine-tuned variants   |
 | **Eval**     | Quality scoring      | `eval-endpoint`     | Evaluation / Judge    |
 
-All teams share a **vLLM-based baseline model** (Mistral-7B-Instruct-v0.2) for comparisons and A/B testing. Observability is provided end-to-end via OpenTelemetry → Prometheus / Loki / Tempo → Grafana.
+All teams share a **vLLM-based model fleet** (4 Mistral-7B variants on dedicated SPOT GPU nodes). Each team has a dedicated model: AWQ (quant), LoRA-enabled (finetune), Judge (eval), and FP16 (reference baseline). Observability is provided end-to-end via OpenTelemetry → Prometheus / Loki / Tempo → Grafana.
 
 ---
 
@@ -214,10 +214,11 @@ node_groups = {
   gpu = {
     instance_types = ["g4dn.xlarge"]
     disk_size      = 100
-    desired_size   = 0          # Scale from 0 — starts on demand
+    desired_size   = 4          # 4 GPU nodes for 4 model variants
     min_size       = 0
-    max_size       = 2
+    max_size       = 4
     ami_type       = "AL2_x86_64_GPU"  # Required — GPU AMI includes NVIDIA drivers
+    capacity_type  = "SPOT"             # ~70% cost savings vs on-demand
     labels         = {
       role                      = "gpu"
       "nvidia.com/gpu.present"  = "true"
@@ -231,7 +232,7 @@ node_groups = {
 }
 ```
 
-> **Note:** GPU nodes default to `desired_size = 0`. The baseline model deployment will trigger scale-up when a pod is scheduled with GPU resource requests.
+> **Note:** GPU nodes use `capacity_type = "SPOT"` for cost savings (~$0.16/hr vs $0.53/hr per node). Spot instances may be reclaimed with 2-minute warning; the Recreate deployment strategy handles this gracefully.
 
 ### 1.3 Initialize and apply
 
@@ -391,7 +392,7 @@ kubectl port-forward -n observability svc/grafana 3000:3000 &
 
 ---
 
-## Phase 4 — Deploy the Baseline Model (vLLM / Mistral-7B-AWQ)
+## Phase 4 — Deploy the Model Fleet (vLLM / Mistral-7B × 4 variants)
 
 ### 4.1 Create the HuggingFace token secret
 
@@ -407,46 +408,34 @@ kubectl create secret generic hf-token \
 
 > **Security tip:** In production, use Sealed Secrets or External Secrets Operator instead of `kubectl create secret`.
 
-### 4.2 Scale up the GPU node group
+### 4.2 GPU nodes (SPOT)
 
-GPU nodes default to `desired_size = 0`. Scale to 1 before deploying vLLM:
+GPU nodes are provisioned via Terraform with `capacity_type = "SPOT"` and `desired_size = 4`:
 
 ```bash
-aws eks update-nodegroup-config \
-  --cluster-name llmplatform-dev \
-  --nodegroup-name llmplatform-dev-gpu \
-  --scaling-config minSize=0,maxSize=2,desiredSize=1 \
-  --region us-west-2
+cd infra/envs/dev
+terraform apply  # Provisions 4x g4dn.xlarge SPOT nodes
 
-# Wait for the GPU node to join (~3 minutes)
-kubectl get nodes -l nvidia.com/gpu.present=true -w
+# Verify all 4 GPU nodes are Ready
+kubectl get nodes -l nvidia.com/gpu.present=true
 ```
 
-### 4.3 Deploy vLLM
+### 4.3 Deploy all 4 model variants
 
 ```bash
 kubectl apply -k k8s/base/llm-baseline/
 ```
 
-This creates:
+This creates 4 vLLM deployments with **pod anti-affinity** (one model per GPU node):
 
-- **PVC** `hf-cache` — 200Gi `gp2` for model weight cache
-- **Deployment** — `vllm/vllm-openai:v0.6.6` serving `TheBloke/Mistral-7B-Instruct-v0.2-AWQ` (AWQ 4-bit quantized)
-- **Service** — `mistral-7b-baseline:8000` (ClusterIP)
+| Deployment | Model | Team | Key Config |
+|-----------|-------|------|------------|
+| `mistral-7b-awq` | TheBloke/Mistral-7B-Instruct-v0.2-AWQ | Quant | `--quantization awq`, max_len=4096 |
+| `mistral-7b-fp16` | mistralai/Mistral-7B-Instruct-v0.2 | Platform (ref) | `--dtype half`, max_len=1024 |
+| `mistral-7b-lora` | AWQ base + LoRA | Finetune | `--enable-lora`, max_loras=4 |
+| `mistral-7b-judge` | TheBloke/Mistral-7B-Instruct-v0.2-AWQ | Eval | `--quantization awq`, max_len=4096 |
 
-The deployment uses:
-
-- **AWQ quantization** — 4-bit weights (~4GB), freeing ~12GB for KV cache on the T4 (16GB VRAM)
-- **Recreate strategy** — single GPU can't run two pods simultaneously
-- **`--enforce-eager`** — avoids CUDA graph memory overhead on T4
-
-Resource requirements per pod:
-
-| Resource         | Request | Limit |
-| ---------------- | ------- | ----- |
-| `nvidia.com/gpu` | 1       | 1     |
-| CPU              | 2       | 3     |
-| Memory           | 12Gi    | 14Gi  |
+Team services route to their dedicated model via `VLLM_BASE_URL` in their ConfigMaps.
 
 ### 4.4 Wait for the model to load
 

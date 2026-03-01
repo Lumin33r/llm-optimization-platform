@@ -1,14 +1,17 @@
-# Design Document 10: Baseline Model Infrastructure
+# Design Document 10: Model Infrastructure
 
 ## Overview
 
-This document defines the baseline model infrastructure for the LLM Optimization Platform. The baseline service provides a **single, friction-free reference endpoint** that all three teams use for:
+This document defines the model infrastructure for the LLM Optimization Platform. The platform runs **4 dedicated vLLM model instances** — one per GPU node — each serving a team-specific purpose:
 
-- **Quant Team** - Full-precision reference for quantization comparisons
-- **FineTune Team** - Control group for A/B experiments against LoRA adapters
-- **Eval Team** - Cheap judge endpoint for scoring prompt-response pairs
-- **CI/CD** - Smoke tests and canary validation
-- **Platform** - Autoscaling validation and performance benchmarking
+| Model Variant | Service Name | Team | Model ID | Key vLLM Flags |
+|--------------|-------------|------|----------|----------------|
+| **AWQ** (4-bit quantized) | `mistral-7b-awq` | Quant | `TheBloke/Mistral-7B-Instruct-v0.2-AWQ` | `--quantization awq`, max_len=4096 |
+| **FP16** (full precision) | `mistral-7b-fp16` | Platform (reference) | `mistralai/Mistral-7B-Instruct-v0.2` | `--dtype half`, max_len=1024 |
+| **LoRA** (adapter-enabled) | `mistral-7b-lora` | Finetune | AWQ base + LoRA | `--quantization awq --enable-lora`, max_loras=4 |
+| **Judge** (scoring) | `mistral-7b-judge` | Eval | `TheBloke/Mistral-7B-Instruct-v0.2-AWQ` | `--quantization awq`, max_len=4096 |
+
+**Infrastructure**: 4x g4dn.xlarge **SPOT** instances (T4 16GB GPU each), managed via EKS node group with `capacity_type = "SPOT"` (~70% cost savings vs on-demand).
 
 **Key Technology Choice**: [vLLM](https://docs.vllm.ai/) provides an OpenAI-compatible server with high throughput, native Prometheus metrics, and optional OpenTelemetry tracing.
 
@@ -18,26 +21,25 @@ This document defines the baseline model infrastructure for the LLM Optimization
 
 ```bash
 # 1. Prerequisites (after design-02 llm-baseline namespace created)
-# Ensure GPU node group available (g5.xlarge minimum)
+# Ensure GPU node group available: 4x g4dn.xlarge SPOT nodes
 
 # 2. Create HuggingFace token secret
 kubectl create secret generic hf-token \
   --from-literal=HUGGING_FACE_HUB_TOKEN=$HF_TOKEN \
   -n llm-baseline
 
-# 3. Create PVC for model cache
-kubectl apply -f k8s/base/llm-baseline/hf-cache-pvc.yaml
+# 3. Deploy all 4 model variants via kustomize
+kubectl apply -k k8s/base/llm-baseline/
 
-# 4. Deploy vLLM
-kubectl apply -f k8s/base/llm-baseline/vllm-deployment.yaml
-kubectl apply -f k8s/base/llm-baseline/vllm-service.yaml
+# 4. Wait for all models to become ready (~5-10 min cold start)
+kubectl wait --for=condition=ready pod -l model-variant \
+  -n llm-baseline --timeout=600s
 
-# 5. Wait for startup (7.5 min max for cold start)
-kubectl wait --for=condition=ready pod -l app=mistral-7b-instruct-vllm \
-  -n llm-baseline --timeout=450s
-
-# 6. Test endpoint
-curl "http://mistral-7b-baseline.llm-baseline.svc:8000/v1/models" | jq .
+# 5. Verify all 4 models are serving
+for svc in mistral-7b-awq mistral-7b-fp16 mistral-7b-lora mistral-7b-judge; do
+  kubectl exec -n llm-baseline deploy/$svc -- \
+    curl -s http://localhost:8000/v1/models | jq -r '.data[0].id'
+done
 ```
 
 **Depends On**: [design-02-kubernetes.md](design-02-kubernetes.md) (namespace), GPU node group
@@ -49,12 +51,13 @@ curl "http://mistral-7b-baseline.llm-baseline.svc:8000/v1/models" | jq .
 
 ```mermaid
 flowchart TB
-    subgraph eks["EKS Cluster"]
-        subgraph baseline_ns["llm-baseline namespace"]
-            vllm["vLLM Deployment<br/>Mistral-7B-Instruct"]
-            pvc["PVC: hf-cache<br/>(200Gi)"]
+    subgraph eks["EKS Cluster — 4x g4dn.xlarge SPOT"]
+        subgraph baseline_ns["llm-baseline namespace (4 GPU nodes)"]
+            awq["mistral-7b-awq<br/>AWQ 4-bit (~4GB VRAM)"]
+            fp16["mistral-7b-fp16<br/>FP16 full-precision (~14GB)"]
+            lora["mistral-7b-lora<br/>AWQ + LoRA adapters"]
+            judge["mistral-7b-judge<br/>AWQ (scoring workloads)"]
             secret["Secret: hf-token"]
-            svc["Service: mistral-7b-baseline<br/>:8000"]
         end
 
         subgraph platform_ns["platform namespace"]
@@ -62,28 +65,25 @@ flowchart TB
         end
 
         subgraph team_ns["Team Namespaces"]
-            quant["quant-api"]
-            finetune["finetune-api"]
-            eval["eval-api"]
+            quant["quant-api<br/>VLLM_BASE_URL → awq"]
+            finetune["finetune-api<br/>VLLM_BASE_URL → lora"]
+            eval["eval-api<br/>VLLM_BASE_URL → judge"]
         end
 
         subgraph observability_ns["observability namespace"]
-            otel["OTEL Collector"]
             prometheus["Prometheus"]
             grafana["Grafana"]
         end
     end
 
-    gateway --> svc
-    quant --> svc
-    finetune --> svc
-    eval --> svc
+    quant --> awq
+    finetune --> lora
+    eval --> judge
 
-    vllm --> pvc
-    vllm --> secret
-
-    vllm -->|"/metrics"| prometheus
-    vllm -->|"OTLP (optional)"| otel
+    awq -->|"metrics"| prometheus
+    fp16 -->|"metrics"| prometheus
+    lora -->|"metrics"| prometheus
+    judge -->|"metrics"| prometheus
     prometheus --> grafana
 ```
 
@@ -91,7 +91,7 @@ flowchart TB
 
 ## Namespace Addition
 
-The baseline model runs in a dedicated `llm-baseline` namespace, extending the existing namespace architecture from [design-02-kubernetes.md](design-02-kubernetes.md):
+All 4 model variants run in the `llm-baseline` namespace with **pod anti-affinity** (`model-variant` label) ensuring each model lands on a separate GPU node. The namespace extends the architecture from [design-02-kubernetes.md](design-02-kubernetes.md):
 
 | Namespace       | Purpose                      | Key Workloads                    |
 | --------------- | ---------------------------- | -------------------------------- |
@@ -100,7 +100,7 @@ The baseline model runs in a dedicated `llm-baseline` namespace, extending the e
 | `finetune`      | Fine-tuning team workloads   | finetune-api deployment          |
 | `eval`          | Evaluation team workloads    | eval-api deployment              |
 | `observability` | Monitoring stack             | Grafana, Prometheus, Loki, Tempo |
-| `llm-baseline`  | **Baseline model inference** | **vLLM deployment, HF cache**    |
+| `llm-baseline`  | **Model inference (4 variants)** | **AWQ, FP16, LoRA, Judge vLLM deployments** |
 
 ---
 
@@ -118,16 +118,18 @@ The baseline model runs in a dedicated `llm-baseline` namespace, extending the e
 
 ### 1.2 Model Selection
 
-**Primary Baseline**: `mistralai/Mistral-7B-Instruct-v0.2`
+The platform runs **4 model variants** on Mistral-7B-Instruct-v0.2, each optimized for a team's mission:
 
-| Property           | Value                                     |
-| ------------------ | ----------------------------------------- |
-| Parameters         | 7B                                        |
-| Context Length     | 8192 tokens                               |
-| License            | Apache 2.0                                |
-| HuggingFace Status | Gated (requires token + terms acceptance) |
-| GPU Requirements   | 1x NVIDIA GPU (A10G, L4, or better)       |
-| Memory             | ~16GB GPU VRAM                            |
+| Variant | Model ID | Quantization | VRAM Usage | max_model_len | Team |
+|---------|----------|-------------|-----------|--------------|------|
+| **AWQ** | `TheBloke/Mistral-7B-Instruct-v0.2-AWQ` | AWQ 4-bit | ~4GB | 4096 | Quant |
+| **FP16** | `mistralai/Mistral-7B-Instruct-v0.2` | None (half) | ~14GB | 1024 | Platform (reference) |
+| **LoRA** | AWQ base + `--enable-lora` | AWQ 4-bit | ~5GB | 4096 | Finetune |
+| **Judge** | `TheBloke/Mistral-7B-Instruct-v0.2-AWQ` | AWQ 4-bit | ~4GB | 4096 | Eval |
+
+**Hardware**: 4x g4dn.xlarge SPOT instances (NVIDIA T4 16GB each)
+
+> **Note**: FP16 uses `max_model_len=1024` and `max_num_seqs=4` because T4's 16GB VRAM leaves only ~2GB for KV cache after loading the full-precision weights (~14GB). AWQ models fit comfortably at 4096 tokens.
 
 > **Note**: This model is gated on HuggingFace. "Friction-free" refers to small/cheap hosting, not tokenless access. A read token with terms acceptance is required.
 

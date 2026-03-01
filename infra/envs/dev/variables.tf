@@ -37,6 +37,7 @@ variable "node_groups" {
     min_size       = number
     max_size       = number
     ami_type       = optional(string, "AL2_x86_64")
+    capacity_type  = optional(string, "ON_DEMAND")
     labels         = map(string)
     taints = list(object({
       key    = string

@@ -3,6 +3,9 @@ kind: Kustomization
 namespace: llm-baseline
 resources:
   - hf-token-secret.yaml
-  - hf-cache-pvc.yaml
   - vllm-deployment.yaml
   - vllm-service.yaml
+  - vllm-awq-deployment.yaml
+  - vllm-fp16-deployment.yaml
+  - vllm-lora-deployment.yaml
+  - vllm-judge-deployment.yaml

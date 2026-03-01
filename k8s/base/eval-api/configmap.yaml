@@ -7,6 +7,7 @@ data:
   LOG_LEVEL: "DEBUG"
   AWS_REGION: "us-west-2"
   SAGEMAKER_ENDPOINT_NAME: ""
+  VLLM_BASE_URL: "http://mistral-7b-judge.llm-baseline.svc.cluster.local:8000"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability.svc.cluster.local:4317"
   OTEL_SERVICE_NAME: "eval-api"
 
