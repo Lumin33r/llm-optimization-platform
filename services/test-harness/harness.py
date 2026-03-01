@@ -4,7 +4,7 @@ import httpx
 import json
 from datetime import datetime
 from typing import List, Dict, Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from contextlib import contextmanager
 
 # Optional OTEL — works without it for local runs
@@ -298,7 +298,7 @@ async def main():
             categories[cat]["passed"] += 1
 
     if any(r.category for r in results):
-        print(f"\nCategory Breakdown:")
+        print("\nCategory Breakdown:")
         for cat, stats in sorted(categories.items()):
             rate = stats["passed"] / stats["total"] * 100 if stats["total"] else 0
             print(f"  {cat:20s}: {stats['passed']}/{stats['total']} ({rate:.0f}%)")
@@ -307,7 +307,7 @@ async def main():
     if args.compare_baseline:
         bl_passed = sum(1 for r in results if r.baseline_passed)
         bl_avg_lat = sum(r.baseline_latency_ms for r in results) / len(results) if results else 0
-        print(f"\n--- Baseline Comparison ---")
+        print("\n--- Baseline Comparison ---")
         print(f"Baseline Pass Rate: {bl_passed/len(results)*100:.1f}%")
         print(f"Baseline Avg Latency: {bl_avg_lat:.1f}ms")
         print(f"Delta Pass Rate: {(passed - bl_passed)/len(results)*100:+.1f}%")

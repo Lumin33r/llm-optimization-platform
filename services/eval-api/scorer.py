@@ -1,7 +1,6 @@
 # services/eval-api/scorer.py
 from dataclasses import dataclass
 from typing import Dict, Optional
-import json
 
 from judge import score_with_judge
 

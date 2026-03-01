@@ -1,6 +1,7 @@
 """OpenTelemetry instrumentation for all services."""
 
 import os
+from contextlib import contextmanager
 from opentelemetry import trace, metrics
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -57,9 +58,6 @@ def setup_telemetry(app, service_name: str, namespace: str = "platform"):
     BotocoreInstrumentor().instrument()
 
     return trace.get_tracer(service_name), metrics.get_meter(service_name)
-
-
-from contextlib import contextmanager
 
 
 @contextmanager

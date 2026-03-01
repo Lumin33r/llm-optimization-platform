@@ -1,9 +1,8 @@
 """Gateway routing with A/B testing support."""
 
-import os
 import json
 import random
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 from dataclasses import dataclass
 from opentelemetry import trace
 

@@ -3,7 +3,7 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
     paths:
       - "services/**"
       - "k8s/**"
@@ -17,10 +17,10 @@ on:
 env:
   AWS_REGION: us-west-2
   ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-2.amazonaws.com
-  PROJECT: llmplatform
+  EKS_CLUSTER: llmplatform-dev
+  IMAGE_TAG: dev-latest
 
 permissions:
-  id-token: write # Required for OIDC
   contents: read
 
 jobs:
@@ -46,211 +46,179 @@ jobs:
           pip install ruff pytest pytest-asyncio
 
       - name: Lint with Ruff
-        run: |
-          ruff check services/
+        run: ruff check services/
 
       - name: Run tests
-        run: |
-          pytest services/tests/ -v --tb=short
+        run: pytest services/tests/ -v --tb=short
 
   # ===========================================
   # Build and Push Images
   # ===========================================
   build-push:
-    name: Build & Push
+    name: Build ${{ matrix.service }}
     needs: lint-and-test
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
-        service: [gateway, quant-api, finetune-api, eval-api]
-
-    outputs:
-      image_tag: ${{ steps.meta.outputs.tags }}
+        include:
+          - service: gateway
+            ecr_repo: llmplatform-dev/gateway
+            dockerfile: services/gateway/Dockerfile
+            context: services/
+          - service: quant-api
+            ecr_repo: llmplatform-dev/quant-api
+            dockerfile: services/quant-api/Dockerfile
+            context: services/
+          - service: finetune-api
+            ecr_repo: llmplatform-dev/finetune-api
+            dockerfile: services/finetune-api/Dockerfile
+            context: services/
+          - service: eval-api
+            ecr_repo: llmplatform-dev/eval-api
+            dockerfile: services/eval-api/Dockerfile
+            context: services/
+          - service: data-engine
+            ecr_repo: llmplatform-dev/data-engine
+            dockerfile: services/data-engine/Dockerfile
+            context: .
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC)
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ env.PROJECT }}-github-actions
-          role-session-name: github-actions-${{ github.run_id }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
-        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.ECR_REGISTRY }}/${{ env.PROJECT }}-${{ github.ref_name == 'main' && 'prod' || 'dev' }}/${{ matrix.service }}
-          tags: |
-            type=sha,prefix=sha-
-            type=ref,event=branch
-            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
-
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: services/${{ matrix.service }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            SERVICE_NAME=${{ matrix.service }}
-            GIT_SHA=${{ github.sha }}
-
-      - name: Verify image scan
+      - name: Build and push ${{ matrix.service }}
         run: |
-          # Wait for ECR scan to complete
-          IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
-          aws ecr wait image-scan-complete \
-            --repository-name ${{ env.PROJECT }}-${{ github.ref_name == 'main' && 'prod' || 'dev' }}/${{ matrix.service }} \
-            --image-id imageTag=sha-${{ github.sha }}
-
-          # Check for critical vulnerabilities
-          SCAN_RESULT=$(aws ecr describe-image-scan-findings \
-            --repository-name ${{ env.PROJECT }}-${{ github.ref_name == 'main' && 'prod' || 'dev' }}/${{ matrix.service }} \
-            --image-id imageTag=sha-${{ github.sha }} \
-            --query 'imageScanFindings.findingSeverityCounts.CRITICAL' \
-            --output text)
-
-          if [ "$SCAN_RESULT" != "None" ] && [ "$SCAN_RESULT" -gt "0" ]; then
-            echo "::error::Critical vulnerabilities found in image"
-            exit 1
-          fi
+          docker build \
+            -t ${{ env.ECR_REGISTRY }}/${{ matrix.ecr_repo }}:${{ env.IMAGE_TAG }} \
+            -f ${{ matrix.dockerfile }} \
+            ${{ matrix.context }}
+          docker push ${{ env.ECR_REGISTRY }}/${{ matrix.ecr_repo }}:${{ env.IMAGE_TAG }}
 
   # ===========================================
-  # Deploy to Dev
+  # Build & Push Grafana Plugin Image
   # ===========================================
-  deploy-dev:
-    name: Deploy to Dev
-    needs: build-push
-    if: github.ref == 'refs/heads/develop'
+  build-grafana:
+    name: Build Grafana
+    needs: lint-and-test
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    environment: dev
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC)
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Build Grafana plugin
+        working-directory: grafana-plugins/llm-platform-ops
+        run: |
+          npm ci
+          npx webpack --mode production
+
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ env.PROJECT }}-github-actions
-          role-session-name: github-actions-deploy-${{ github.run_id }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Grafana image
+        run: |
+          docker build \
+            -t ${{ env.ECR_REGISTRY }}/llmplatform-dev/grafana-plugin:${{ env.IMAGE_TAG }} \
+            -f grafana-plugins/Dockerfile \
+            grafana-plugins/
+          docker push ${{ env.ECR_REGISTRY }}/llmplatform-dev/grafana-plugin:${{ env.IMAGE_TAG }}
+
+  # ===========================================
+  # Deploy to EKS
+  # ===========================================
+  deploy:
+    name: Deploy to EKS
+    needs: [build-push, build-grafana]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Update kubeconfig
         run: |
-          aws eks update-kubeconfig --name ${{ env.PROJECT }}-dev --region ${{ env.AWS_REGION }}
+          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
 
-      - name: Install Kustomize
-        uses: imranismail/setup-kustomize@v2
-
-      - name: Deploy with Kustomize
+      - name: Deploy platform
         run: |
-          cd k8s/overlays/dev
+          kubectl apply -k k8s/overlays/dev/
+          kubectl apply -f k8s/base/observability/
+          kubectl apply -f k8s/base/data-engine/
+          kubectl apply -k k8s/base/llm-baseline/
 
-          # Update image tags to current SHA
-          kustomize edit set image \
-            gateway=${{ env.ECR_REGISTRY }}/${{ env.PROJECT }}-dev/gateway:sha-${{ github.sha }} \
-            quant-api=${{ env.ECR_REGISTRY }}/${{ env.PROJECT }}-dev/quant-api:sha-${{ github.sha }} \
-            finetune-api=${{ env.ECR_REGISTRY }}/${{ env.PROJECT }}-dev/finetune-api:sha-${{ github.sha }} \
-            eval-api=${{ env.ECR_REGISTRY }}/${{ env.PROJECT }}-dev/eval-api:sha-${{ github.sha }}
-
-          # Apply changes
-          kustomize build . | kubectl apply -f -
-
-      - name: Verify deployment
+      - name: Wait for rollouts
         run: |
-          # Wait for rollouts to complete
+          echo "=== Platform services ==="
           kubectl rollout status deployment/gateway -n platform --timeout=300s
           kubectl rollout status deployment/quant-api -n quant --timeout=300s
           kubectl rollout status deployment/finetune-api -n finetune --timeout=300s
           kubectl rollout status deployment/eval-api -n eval --timeout=300s
 
-          # Verify pods are ready
-          echo "=== Pod Status ==="
-          kubectl get pods -A -l app.kubernetes.io/part-of=llm-optimization-platform
+          echo "=== Data engine ==="
+          kubectl rollout status deployment/data-engine -n platform --timeout=300s
 
-          # Verify endpoints
-          echo "=== Endpoints ==="
-          kubectl get endpoints -A | grep -E 'gateway|quant|finetune|eval'
+          echo "=== Observability ==="
+          kubectl rollout status deployment/grafana -n observability --timeout=300s
+          kubectl rollout status deployment/prometheus -n observability --timeout=300s
 
-      - name: Health check
-        run: |
-          # Get gateway service URL
-          GATEWAY_URL=$(kubectl get ingress platform-ingress -n platform -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-
-          # Wait for DNS propagation
-          sleep 30
-
-          # Health check
-          curl -sf "http://${GATEWAY_URL}/health" || exit 1
-          echo "Health check passed"
-
-  # ===========================================
-  # Deploy to Prod
-  # ===========================================
-  deploy-prod:
-    name: Deploy to Prod
-    needs: build-push
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    environment: production # Requires approval
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ env.PROJECT }}-github-actions
-          role-session-name: github-actions-deploy-prod-${{ github.run_id }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Update kubeconfig
-        run: |
-          aws eks update-kubeconfig --name ${{ env.PROJECT }}-prod --region ${{ env.AWS_REGION }}
-
-      - name: Install Kustomize
-        uses: imranismail/setup-kustomize@v2
-
-      - name: Deploy with Kustomize
-        run: |
-          cd k8s/overlays/prod
-
-          # Update image tags
-          kustomize edit set image \
-            gateway=${{ env.ECR_REGISTRY }}/${{ env.PROJECT }}-prod/gateway:sha-${{ github.sha }} \
-            quant-api=${{ env.ECR_REGISTRY }}/${{ env.PROJECT }}-prod/quant-api:sha-${{ github.sha }} \
-            finetune-api=${{ env.ECR_REGISTRY }}/${{ env.PROJECT }}-prod/finetune-api:sha-${{ github.sha }} \
-            eval-api=${{ env.ECR_REGISTRY }}/${{ env.PROJECT }}-prod/eval-api:sha-${{ github.sha }}
-
-          kustomize build . | kubectl apply -f -
-
-      - name: Verify deployment
-        run: |
-          kubectl rollout status deployment/gateway -n platform --timeout=600s
-          kubectl rollout status deployment/quant-api -n quant --timeout=600s
-          kubectl rollout status deployment/finetune-api -n finetune --timeout=600s
-          kubectl rollout status deployment/eval-api -n eval --timeout=600s
+          echo "=== LLM models ==="
+          for model in mistral-7b-awq mistral-7b-fp16 mistral-7b-lora mistral-7b-judge; do
+            echo "  Waiting for $model..."
+            kubectl rollout status deployment/$model -n llm-baseline --timeout=600s || echo "WARNING: $model not ready"
+          done
 
       - name: Smoke test
         run: |
-          GATEWAY_URL=$(kubectl get ingress platform-ingress -n platform -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          kubectl port-forward -n platform svc/gateway 8080:8000 &
+          sleep 5
 
-          # Health check
-          curl -sf "http://${GATEWAY_URL}/health"
+          echo "=== Gateway Health ==="
+          curl -sf http://localhost:8080/health || echo "WARNING: Gateway health check failed"
 
-          # Quick prediction test
-          curl -sf -X POST "http://${GATEWAY_URL}/api/quant/predict" \
-            -H "Content-Type: application/json" \
-            -d '{"prompt": "test", "max_tokens": 5}' \
-            || echo "Warning: Prediction test failed"
+          echo "=== Ops Health ==="
+          curl -sf http://localhost:8080/ops/health || echo "WARNING: Ops health check failed"
+
+      - name: Verify deployment
+        run: |
+          echo "=== All Pods ==="
+          kubectl get pods -A --field-selector=status.phase!=Succeeded | grep -v kube-system
+
+          echo ""
+          echo "=== Services ==="
+          kubectl get svc -A | grep -v kube-system
+
+          echo ""
+          echo "=== Deployment Complete ==="

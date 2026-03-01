@@ -1,6 +1,5 @@
 """Data Engine API — serves promptsets and runs test harness."""
 
-import asyncio
 import json
 import os
 import sys

@@ -718,15 +718,15 @@ The `github_oidc` Terraform module creates the OIDC provider and IAM role `llmpl
 
 | Workflow                 | Trigger                                       | What it does                              |
 | ------------------------ | --------------------------------------------- | ----------------------------------------- |
-| `ci-cd.yaml`             | Push to `main`/`develop` (services/k8s paths) | Lint → test → build → push → deploy       |
+| `ci-cd.yaml`             | Push to `main` (services/k8s paths)            | Lint → test → build → push → deploy       |
+| `deploy.yaml`            | Manual dispatch                               | Full build + deploy to EKS                |
 | `terraform.yaml`         | Push to `main` (infra paths) or manual        | fmt → plan → apply (or destroy)           |
 | `rollback.yaml`          | Manual dispatch                               | Emergency rollback to previous deployment |
 | `post-deploy-smoke.yaml` | After deploy                                  | Smoke tests against live endpoints        |
 
-### 9.3 Branch strategy
+### 9.3 Environment
 
-- **`develop`** → auto-deploys to `dev` cluster (no approval)
-- **`main`** → deploys to `prod` cluster (requires `production` environment approval in GitHub)
+Single environment (`dev`) — all pushes to `main` that touch services or k8s manifests trigger CI/CD.
 
 ---
 
