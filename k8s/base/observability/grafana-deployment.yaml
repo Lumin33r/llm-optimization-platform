@@ -61,6 +61,7 @@ metadata:
   name: grafana
   namespace: observability
 spec:
+  type: LoadBalancer
   selector:
     app: grafana
   ports:

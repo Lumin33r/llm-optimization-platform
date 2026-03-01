@@ -90,7 +90,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: "18"
 
       - name: Build Grafana plugin
         working-directory: grafana-plugins/llm-platform-ops
@@ -203,3 +203,25 @@ jobs:
           echo ""
           echo "=== Deployment Complete ==="
           echo "All services deployed successfully to ${{ env.EKS_CLUSTER }}"
+
+      - name: Get Grafana public URL
+        run: |
+          echo "Waiting for Grafana LoadBalancer to get an external address..."
+          for i in $(seq 1 30); do
+            HOSTNAME=$(kubectl get svc grafana -n observability -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+            IP=$(kubectl get svc grafana -n observability -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+            ADDR=${HOSTNAME:-$IP}
+            if [ -n "$ADDR" ]; then
+              echo ""
+              echo "========================================"
+              echo "  Grafana is available at:"
+              echo "  http://${ADDR}:3000"
+              echo "  Login: admin / admin"
+              echo "========================================"
+              exit 0
+            fi
+            echo "  Attempt $i/30 — not ready yet, waiting 10s..."
+            sleep 10
+          done
+          echo "WARNING: LoadBalancer address not assigned after 5 minutes"
+          kubectl get svc grafana -n observability -o yaml
