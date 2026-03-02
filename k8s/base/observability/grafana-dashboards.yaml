@@ -33,68 +33,166 @@ data:
       "links": [],
       "panels": [
         {
-          "title": "Request Rate (req/s)",
+          "title": "Team → Model Routing",
+          "type": "text",
+          "gridPos": { "h": 5, "w": 24, "x": 0, "y": 0 },
+          "options": {
+            "mode": "markdown",
+            "content": "| Team | Model Variant | Pod | Mission |\n|------|--------------|-----|---------|\n| **Quantization** | AWQ (4-bit) | `mistral-7b-awq` | Compare compressed vs full-precision inference quality |\n| **Fine-Tuning** | LoRA adapter | `mistral-7b-lora` | Domain-adapted model, A/B vs base |\n| **Evaluation** | Judge model | `mistral-7b-judge` | Score prompt-response pairs for coherence/factuality/toxicity |\n| _Reference_ | FP16 baseline | `mistral-7b-fp16` | Full-precision baseline for comparison |"
+          }
+        },
+        {
+          "title": "Request Rate by Model (req/s)",
           "type": "timeseries",
-          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
           "targets": [
             {
-              "expr": "sum(rate(vllm:request_success_total[5m]))",
+              "expr": "sum by (app)(rate(vllm:request_success_total{namespace=\"llm-baseline\"}[5m]))",
+              "legendFormat": "{{app}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "reqps", "custom": { "fillOpacity": 10 } }
+          }
+        },
+        {
+          "title": "Total Request Rate (all models)",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 5 },
+          "targets": [
+            {
+              "expr": "sum(rate(vllm:request_success_total{namespace=\"llm-baseline\"}[5m]))",
               "legendFormat": "Total RPS"
             }
           ],
           "fieldConfig": {
-            "defaults": {
-              "unit": "reqps"
-            }
+            "defaults": { "unit": "reqps" }
           }
         },
         {
-          "title": "Generation Throughput (tokens/s)",
-          "type": "timeseries",
-          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "title": "Total Running Requests",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 5 },
           "targets": [
             {
-              "expr": "vllm:avg_generation_throughput_toks_per_s",
-              "legendFormat": "generation tok/s"
-            },
+              "expr": "sum(vllm:num_requests_running{namespace=\"llm-baseline\"})",
+              "legendFormat": "In-flight"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "short" }
+          }
+        },
+        {
+          "title": "Waiting Requests (queue overflow)",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 9 },
+          "targets": [
             {
-              "expr": "vllm:avg_prompt_throughput_toks_per_s",
-              "legendFormat": "prompt tok/s"
+              "expr": "sum(vllm:num_requests_waiting{namespace=\"llm-baseline\"})",
+              "legendFormat": "Queued"
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "short"
+              "unit": "short",
+              "thresholds": {
+                "steps": [
+                  { "value": 0, "color": "green" },
+                  { "value": 5, "color": "yellow" },
+                  { "value": 20, "color": "red" }
+                ]
+              }
             }
           }
         },
         {
-          "title": "Active / Waiting / Swapped Requests",
-          "type": "timeseries",
-          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "title": "Active Models",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 9 },
           "targets": [
             {
-              "expr": "vllm:num_requests_running",
-              "legendFormat": "running"
-            },
-            {
-              "expr": "vllm:num_requests_waiting",
-              "legendFormat": "waiting"
-            },
-            {
-              "expr": "vllm:num_requests_swapped",
-              "legendFormat": "swapped"
+              "expr": "count(up{namespace=\"llm-baseline\", app=~\"mistral-7b-.*\"} == 1)",
+              "legendFormat": "Live"
             }
-          ]
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "short" }
+          }
         },
         {
-          "title": "GPU KV-Cache Usage",
-          "type": "gauge",
-          "gridPos": { "h": 8, "w": 6, "x": 12, "y": 8 },
+          "title": "Generation Throughput by Model (tok/s)",
+          "description": "Quant team: Is AWQ faster than FP16? Finetune team: How does LoRA compare?",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
           "targets": [
             {
-              "expr": "vllm:gpu_cache_usage_perc * 100",
-              "legendFormat": "GPU Cache %"
+              "expr": "vllm:avg_generation_throughput_toks_per_s{namespace=\"llm-baseline\"}",
+              "legendFormat": "{{app}} gen"
+            },
+            {
+              "expr": "vllm:avg_prompt_throughput_toks_per_s{namespace=\"llm-baseline\"}",
+              "legendFormat": "{{app}} prompt"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }
+          }
+        },
+        {
+          "title": "Queue Depth by Model (running + waiting)",
+          "description": "Eval team: Is the judge model overloaded? Lab lead: Who needs more capacity?",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+          "targets": [
+            {
+              "expr": "vllm:num_requests_running{namespace=\"llm-baseline\"}",
+              "legendFormat": "{{app}} running"
+            },
+            {
+              "expr": "vllm:num_requests_waiting{namespace=\"llm-baseline\"}",
+              "legendFormat": "{{app}} waiting"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "custom": { "fillOpacity": 10 } }
+          }
+        },
+        {
+          "title": "GPU KV-Cache Usage by Model",
+          "description": "Lab lead: Is one model burning more GPU memory? Quant team: AWQ should use less cache than FP16.",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 21 },
+          "targets": [
+            {
+              "expr": "vllm:gpu_cache_usage_perc{namespace=\"llm-baseline\"} * 100",
+              "legendFormat": "{{app}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "min": 0,
+              "max": 100,
+              "custom": { "fillOpacity": 10 },
+              "thresholds": {
+                "steps": [
+                  { "value": 0, "color": "green" },
+                  { "value": 70, "color": "yellow" },
+                  { "value": 90, "color": "red" }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "GPU KV-Cache per Model (gauges)",
+          "type": "bargauge",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 21 },
+          "targets": [
+            {
+              "expr": "vllm:gpu_cache_usage_perc{namespace=\"llm-baseline\"} * 100",
+              "legendFormat": "{{app}}"
             }
           ],
           "fieldConfig": {
@@ -110,36 +208,16 @@ data:
                 ]
               }
             }
-          }
-        },
-        {
-          "title": "CPU KV-Cache Usage",
-          "type": "gauge",
-          "gridPos": { "h": 8, "w": 6, "x": 18, "y": 8 },
-          "targets": [
-            {
-              "expr": "vllm:cpu_cache_usage_perc * 100",
-              "legendFormat": "CPU Cache %"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percent",
-              "min": 0,
-              "max": 100,
-              "thresholds": {
-                "steps": [
-                  { "value": 0, "color": "green" },
-                  { "value": 70, "color": "yellow" },
-                  { "value": 90, "color": "red" }
-                ]
-              }
-            }
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true
           }
         }
       ],
       "schemaVersion": 39,
-      "tags": ["llm", "platform"],
+      "tags": ["llm", "platform", "teams"],
       "templating": { "list": [] },
       "time": { "from": "now-1h", "to": "now" },
       "title": "LLM Platform Overview",
