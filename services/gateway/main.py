@@ -13,6 +13,8 @@ from opentelemetry import trace
 
 from routing import Router
 from shared.telemetry import setup_telemetry
+from spans import set_route_attributes, set_backend_call_attributes
+from propagation import create_propagation_headers
 from ops_api import router as ops_router
 
 app = FastAPI(title="Gateway API")
@@ -58,9 +60,10 @@ router = Router(ROUTE_TABLE)
 # HTTP client
 http_client = httpx.AsyncClient(timeout=60.0)
 
-# Metrics
-request_counter = meter.create_counter("gateway.requests")
-latency_histogram = meter.create_histogram("gateway.latency_ms")
+# Metrics (design-08 §4 naming)
+request_counter = meter.create_counter("lab_gateway_requests_total")
+fallback_counter = meter.create_counter("lab_gateway_fallback_total")
+latency_histogram = meter.create_histogram("lab_gateway_request_duration_ms")
 
 
 @app.post("/api/{team}/predict")
@@ -97,30 +100,47 @@ async def route_predict(
     # Select A/B variant if configured
     variant = router.select_variant(team)
 
-    # Get current span and add attributes
+    # Get current span and add route attributes (design-08 §2)
     current_span = trace.get_current_span()
-    current_span.set_attribute("team", team)
-    current_span.set_attribute("correlation_id", correlation_id)
-    if variant:
-        current_span.set_attribute("ab_variant", variant)
+    policy_id = route.policy_id if hasattr(route, "policy_id") else "default"
+    set_route_attributes(
+        current_span,
+        team=team,
+        decision="routed",
+        reason="path_match",
+        policy_id=policy_id,
+        ab_bucket=variant,
+    )
 
     # Forward request
     try:
         body = await request.json()
 
-        headers = {
-            "X-Correlation-ID": correlation_id,
-            "Content-Type": "application/json"
-        }
+        # Propagate trace context + baggage (design-08 §7)
+        headers = create_propagation_headers(
+            policy_id=policy_id,
+            ab_bucket=variant,
+        )
+        headers["X-Correlation-ID"] = correlation_id
+        headers["Content-Type"] = "application/json"
         if variant:
             headers["X-AB-Variant"] = variant
 
-        response = await http_client.post(
-            f"{route.url}/predict",
-            json=body,
-            headers=headers,
-            timeout=route.timeout_ms / 1000
-        )
+        # Backend call with span attributes (design-08 §2)
+        with tracer.start_as_current_span("backend_call") as backend_span:
+            set_backend_call_attributes(
+                backend_span,
+                team=team,
+                ready_at_call=True,
+                timeout_ms=route.timeout_ms,
+            )
+
+            response = await http_client.post(
+                f"{route.url}/predict",
+                json=body,
+                headers=headers,
+                timeout=route.timeout_ms / 1000
+            )
 
         latency_ms = (time.time() - start_time) * 1000
 

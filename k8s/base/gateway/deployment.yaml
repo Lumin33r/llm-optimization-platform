@@ -42,6 +42,25 @@ spec:
             - configMapRef:
                 name: gateway-config
 
+          # Pod metadata for OTEL resource attributes (design-08 §1)
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_UID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+            - name: K8S_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: LAB_TEAM
+              value: "platform"
+            - name: SERVICE_VERSION
+              value: "0.1.0"
+
           # Probe configuration
           startupProbe:
             httpGet:

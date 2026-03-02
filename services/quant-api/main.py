@@ -12,6 +12,8 @@ from shared.health import HealthChecker
 from shared.sagemaker_client import SageMakerClient
 from shared.vllm_client import VLLMClient
 from shared.telemetry import setup_telemetry
+from shared.genai_spans import GenAISpanContext
+from shared.debug_events import should_sample_details, prompt_hash, add_prompt_event, add_completion_event
 
 
 # Request/Response Models
@@ -63,9 +65,11 @@ app = FastAPI(
 # Setup telemetry
 tracer, meter = setup_telemetry(app, "quant-api", "quant")
 
-# Metrics
-predict_counter = meter.create_counter("quant_api.predictions")
-predict_latency = meter.create_histogram("quant_api.latency_ms")
+# Metrics (design-08 §4 naming)
+predict_counter = meter.create_counter("lab_service_requests_total")
+predict_latency = meter.create_histogram("lab_llm_e2e_duration_ms")
+ttft_histogram = meter.create_histogram("lab_llm_ttft_ms")
+sagemaker_error_counter = meter.create_counter("lab_service_sagemaker_errors_total")
 
 
 # Health Endpoints
@@ -125,17 +129,41 @@ async def predict(
     }
 
     try:
-        # Invoke SageMaker
-        result = await app.state.sagemaker.invoke(
-            payload=payload,
-            correlation_id=correlation_id
-        )
+        # GenAI span with semantic conventions (design-08 §3)
+        with GenAISpanContext(
+            tracer=tracer,
+            operation_name="predict",
+            model_name="Mistral-7B-AWQ",
+            variant_type="awq",
+            variant_id=os.getenv("MODEL_VARIANT_ID", "quant-awq-v1"),
+            endpoint_name=os.getenv("SAGEMAKER_ENDPOINT_NAME", "local-vllm"),
+        ) as genai_span:
+            # Debug events on sampled traces (design-08 §6)
+            if should_sample_details():
+                add_prompt_event(genai_span, prompt_hash(request.prompt))
+
+            # Invoke SageMaker / vLLM
+            result = await app.state.sagemaker.invoke(
+                payload=payload,
+                correlation_id=correlation_id
+            )
+
+            # Record token metrics on the span
+            genai_span.record_completion(
+                input_tokens=result.get("input_tokens", 0),
+                output_tokens=result.get("output_tokens", 0),
+            )
+
+            # Debug: completion event
+            if should_sample_details():
+                output_text = result.get("generated_text", "")
+                add_completion_event(genai_span, prompt_hash(output_text))
 
         latency_ms = (time.time() - start_time) * 1000
 
         # Record metrics
-        predict_counter.add(1, {"status": "success"})
-        predict_latency.record(latency_ms)
+        predict_counter.add(1, {"status": "success", "team": "quant"})
+        predict_latency.record(latency_ms, {"team": "quant"})
 
         return PredictResponse(
             output=result.get("generated_text", result.get("output", "")),
@@ -145,7 +173,8 @@ async def predict(
         )
 
     except TimeoutError as e:
-        predict_counter.add(1, {"status": "timeout"})
+        predict_counter.add(1, {"status": "timeout", "team": "quant"})
+        sagemaker_error_counter.add(1, {"team": "quant", "error_type": "timeout"})
         raise HTTPException(
             status_code=504,
             detail={
@@ -155,7 +184,8 @@ async def predict(
             }
         )
     except Exception as e:
-        predict_counter.add(1, {"status": "error"})
+        predict_counter.add(1, {"status": "error", "team": "quant"})
+        sagemaker_error_counter.add(1, {"team": "quant", "error_type": type(e).__name__})
         raise HTTPException(
             status_code=500,
             detail={

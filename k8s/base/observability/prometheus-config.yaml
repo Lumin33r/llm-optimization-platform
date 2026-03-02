@@ -21,13 +21,27 @@ data:
         static_configs:
           - targets: ['localhost:9090']
 
-      # Scrape vLLM baseline model metrics
-      - job_name: 'vllm'
+      # Scrape all 4 vLLM model variants
+      - job_name: 'vllm-models'
         metrics_path: /metrics
+        scrape_interval: 10s
         static_configs:
-          - targets: ['mistral-7b-baseline.llm-baseline.svc:8000']
+          - targets: ['mistral-7b-awq.llm-baseline.svc:8000']
             labels:
-              model: 'mistral-7b-instruct-awq'
+              app: 'mistral-7b-awq'
+              team: 'quantization'
+          - targets: ['mistral-7b-fp16.llm-baseline.svc:8000']
+            labels:
+              app: 'mistral-7b-fp16'
+              team: 'reference'
+          - targets: ['mistral-7b-lora.llm-baseline.svc:8000']
+            labels:
+              app: 'mistral-7b-lora'
+              team: 'finetuning'
+          - targets: ['mistral-7b-judge.llm-baseline.svc:8000']
+            labels:
+              app: 'mistral-7b-judge'
+              team: 'evaluation'
 
       # Auto-discover pods with prometheus.io/scrape annotation
       - job_name: 'kubernetes-pods'

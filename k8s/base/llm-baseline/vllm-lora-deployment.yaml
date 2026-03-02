@@ -59,6 +59,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            - name: POD_UID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
           args:
             - "--model"
             - "TheBloke/Mistral-7B-Instruct-v0.2-AWQ"
