@@ -451,6 +451,45 @@ EVAL_API_URL = os.getenv(
 )
 
 
+# --------------- Benchmark proxy ---------------
+
+class BenchmarkRunRequest(BaseModel):
+    concurrency: int = 5
+
+
+@router.post("/harness/benchmark")
+async def start_benchmark(req: BenchmarkRunRequest):
+    """Start a full benchmark run (proxied to data-engine)."""
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{DATA_ENGINE_URL}/harness/benchmark",
+                json=req.model_dump()
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as e:
+        logger.error(f"Failed to start benchmark: {e}")
+        raise HTTPException(502, f"Data engine unavailable: {e}")
+
+
+@router.get("/harness/benchmark/{benchmark_id}")
+async def get_benchmark(benchmark_id: str):
+    """Get benchmark status/results (proxied from data-engine)."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"{DATA_ENGINE_URL}/harness/benchmark/{benchmark_id}")
+            if resp.status_code == 404:
+                raise HTTPException(404, f"Benchmark '{benchmark_id}' not found")
+            resp.raise_for_status()
+            return resp.json()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get benchmark: {e}")
+        raise HTTPException(502, f"Data engine unavailable: {e}")
+
+
 class ScoreRequest(BaseModel):
     prompt: str
     response: str
