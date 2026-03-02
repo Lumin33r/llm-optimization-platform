@@ -69,10 +69,10 @@ spec:
           resources:
             requests:
               cpu: 50m
-              memory: 32Mi
+              memory: 64Mi
             limits:
               cpu: 200m
-              memory: 64Mi
+              memory: 128Mi
         # --- Grafana (port 3001, internal only) ---
         - name: grafana
           image: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/grafana-plugin:dev-latest
