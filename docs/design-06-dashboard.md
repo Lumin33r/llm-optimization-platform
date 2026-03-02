@@ -101,6 +101,19 @@ kubectl rollout restart deployment/grafana -n observability
 | `/ops/stats`    | GET    | Platform statistics (24h window) | Request counts, error rates, P95 |
 | `/ops/test`     | POST   | Execute test prediction          | Correlation ID, result           |
 
+#### Data-Engine Harness & Benchmark Endpoints
+
+| Endpoint                  | Method | Description                                     |
+| ------------------------- | ------ | ----------------------------------------------- |
+| `/ops/promptsets`         | GET    | List available promptsets                       |
+| `/ops/harness/run`        | POST   | Execute single harness run                      |
+| `/ops/harness/runs`       | GET    | List past harness runs                          |
+| `/ops/harness/runs/{id}`  | GET    | Get specific harness run results                |
+| `/harness/benchmark`      | POST   | Start full benchmark (all 3 teams, 700 prompts) |
+| `/harness/benchmark/{id}` | GET    | Get benchmark status/results                    |
+
+> **See also:** [design-12-benchmark.md](design-12-benchmark.md) for the full benchmark test battery specification.
+
 ### Implementation
 
 ```python
@@ -392,11 +405,12 @@ grafana-plugins/
     │   ├── api/
     │   │   └── opsApi.ts        # Gateway ops API client
     │   ├── components/
-    │   │   ├── OpsPanel.tsx     # Main panel component
+    │   │   ├── OpsPanel.tsx       # Main panel component
     │   │   ├── ServicesTable.tsx
     │   │   ├── HealthOverview.tsx
     │   │   ├── StatsCards.tsx
-    │   │   └── TestConsole.tsx
+    │   │   ├── TestConsole.tsx
+    │   │   └── HarnessConsole.tsx # Test harness & benchmark runner
     │   └── styles/
     │       └── panel.css
     └── README.md
@@ -1091,7 +1105,7 @@ The "Monday Morning" view provides quick platform health assessment:
       "type": "llmplatform-ops-panel",
       "gridPos": { "x": 0, "y": 0, "w": 24, "h": 12 },
       "options": {
-        "gatewayUrl": "http://gateway.platform.svc.cluster.local",
+        "gatewayUrl": "/gateway-proxy",
         "refreshInterval": 30
       }
     },
@@ -1137,6 +1151,34 @@ The "Monday Morning" view provides quick platform health assessment:
   ]
 }
 ```
+
+---
+
+## Gateway Connectivity: Nginx Reverse Proxy
+
+The Grafana plugin makes **client-side `fetch()` calls** from the user's browser. Browsers cannot resolve Kubernetes internal DNS names (`gateway.platform.svc.cluster.local`), so a reverse proxy sidecar is used.
+
+### Architecture
+
+The Grafana pod runs two containers:
+
+| Container     | Port | Purpose                              |
+| ------------- | ---- | ------------------------------------ |
+| `nginx-proxy` | 3000 | User-facing reverse proxy            |
+| `grafana`     | 3001 | Grafana server (internal to the pod) |
+
+```
+Browser :3000 → nginx → /             → Grafana :3001
+                      → /gateway-proxy/ → gateway.platform.svc:8000
+```
+
+- The plugin's `gatewayUrl` option defaults to `/gateway-proxy` (a relative URL).
+- nginx proxies `/gateway-proxy/` to the gateway's **internal K8s DNS** — no external ELB hostname required.
+- WebSocket support is enabled for Grafana Live (`Upgrade` / `Connection: upgrade` headers).
+
+> **Key Benefit:** The gateway URL never changes, even if the LoadBalancer is recreated. No `sed` patching needed in CI/CD.
+
+See [design-03-observability.md](design-03-observability.md) for the full deployment YAML.
 
 ---
 
@@ -1186,23 +1228,26 @@ volumes:
 
 ## Implementation Checklist
 
-- [ ] Implement Gateway ops API endpoints
-  - [ ] `GET /ops/services`
-  - [ ] `GET /ops/health`
-  - [ ] `GET /ops/stats`
-  - [ ] `POST /ops/test`
-- [ ] Create Grafana plugin project structure
-- [ ] Implement OpsApi client in TypeScript
-- [ ] Create OpsPanel main component
-- [ ] Implement sub-components:
-  - [ ] ServicesTable
-  - [ ] HealthOverview
-  - [ ] StatsCards
-  - [ ] TestConsole
-- [ ] Build and package plugin
-- [ ] Deploy plugin to Grafana
-- [ ] Configure dashboard with plugin panel
-- [ ] Add Prometheus and Loki panels
-- [ ] Test live polling functionality
-- [ ] Test quick test functionality
-- [ ] Document panel configuration options
+- [x] Implement Gateway ops API endpoints
+  - [x] `GET /ops/services`
+  - [x] `GET /ops/health`
+  - [x] `GET /ops/stats`
+  - [x] `POST /ops/test`
+- [x] Create Grafana plugin project structure
+- [x] Implement OpsApi client in TypeScript
+- [x] Create OpsPanel main component
+- [x] Implement sub-components:
+  - [x] ServicesTable
+  - [x] HealthOverview
+  - [x] StatsCards
+  - [x] TestConsole
+  - [x] HarnessConsole (test harness + benchmark runner)
+- [x] Build and package plugin
+- [x] Deploy plugin to Grafana (custom Docker image)
+- [x] Configure dashboard with plugin panel
+- [x] Add Prometheus and Loki panels (26 panels via design-11)
+- [x] Test live polling functionality
+- [x] Test quick test functionality
+- [x] Document panel configuration options
+- [x] Nginx reverse proxy sidecar for gateway connectivity
+- [x] Benchmark test battery (700 prompts, 3 teams) — see design-12

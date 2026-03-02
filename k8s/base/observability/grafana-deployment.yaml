@@ -1,4 +1,47 @@
 # k8s/base/observability/grafana-deployment.yaml
+#
+# Architecture: nginx sidecar reverse-proxies browser requests so the
+# Grafana plugin can reach the gateway via a relative URL (/gateway-proxy/)
+# instead of needing the external ELB hostname.
+#
+#   Browser :3000 → nginx → /            → Grafana :3001
+#                         → /gateway-proxy/ → gateway.platform.svc:8000
+#
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-nginx-conf
+  namespace: observability
+data:
+  default.conf: |
+    server {
+        listen 3000;
+        client_max_body_size 10m;
+
+        # Grafana UI and API
+        location / {
+            proxy_pass http://127.0.0.1:3001;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            # WebSocket support for Grafana Live
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+        }
+
+        # Reverse proxy to gateway (internal K8s DNS — stable)
+        location /gateway-proxy/ {
+            proxy_pass http://gateway.platform.svc.cluster.local:8000/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_connect_timeout 10s;
+            proxy_read_timeout 120s;
+        }
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,12 +58,30 @@ spec:
         app: grafana
     spec:
       containers:
+        # --- nginx reverse proxy (port 3000, user-facing) ---
+        - name: nginx-proxy
+          image: nginx:1.25-alpine
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+        # --- Grafana (port 3001, internal only) ---
         - name: grafana
           image: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/grafana-plugin:dev-latest
           imagePullPolicy: Always
           ports:
-            - containerPort: 3000
+            - containerPort: 3001
           env:
+            - name: GF_SERVER_HTTP_PORT
+              value: "3001"
             - name: GF_SECURITY_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -45,6 +106,9 @@ spec:
               cpu: "1"
               memory: 1Gi
       volumes:
+        - name: nginx-conf
+          configMap:
+            name: grafana-nginx-conf
         - name: datasources
           configMap:
             name: grafana-datasources

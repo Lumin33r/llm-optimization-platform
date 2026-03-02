@@ -240,29 +240,9 @@ jobs:
             exit 1
           fi
 
-      - name: Patch dashboard with public gateway URL
-        run: |
-          echo "Waiting for Gateway LoadBalancer hostname..."
-          for i in $(seq 1 30); do
-            GW_HOST=$(kubectl get svc gateway -n platform -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
-            if [ -n "$GW_HOST" ]; then
-              echo "Gateway LB: $GW_HOST"
-              break
-            fi
-            echo "  Attempt $i/30 — waiting 10s..."
-            sleep 10
-          done
-
-          if [ -n "$GW_HOST" ]; then
-            echo "Patching dashboard ConfigMap with gateway URL..."
-            sed -i "s|http://localhost:8000|http://${GW_HOST}:8000|g" k8s/base/observability/grafana-dashboards.yaml
-            kubectl apply -f k8s/base/observability/grafana-dashboards.yaml
-            kubectl rollout restart deployment grafana -n observability
-            kubectl rollout status deployment grafana -n observability --timeout=120s
-            echo "Dashboard patched with public gateway URL"
-          else
-            echo "WARNING: Gateway LB not ready — dashboard will use localhost:8000"
-          fi
+      # NOTE: Gateway URL patching is no longer needed. The Grafana pod runs an
+      # nginx reverse proxy sidecar that proxies /gateway-proxy/ to the gateway's
+      # internal K8s DNS. The dashboard uses the relative URL /gateway-proxy.
 
       - name: Verify deployment
         run: |

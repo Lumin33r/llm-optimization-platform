@@ -7,7 +7,7 @@ export const plugin = new PanelPlugin(OpsPanel).setPanelOptions((builder) => {
       path: 'gatewayUrl',
       name: 'Gateway URL',
       description: 'Base URL for the LLM Platform Gateway ops API',
-      defaultValue: 'http://localhost:8000',
+      defaultValue: '/gateway-proxy',
     })
     .addNumberInput({
       path: 'refreshInterval',

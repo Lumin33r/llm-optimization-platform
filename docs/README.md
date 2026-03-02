@@ -650,7 +650,7 @@ kubectl rollout restart deployment/grafana -n observability
 1. Open Grafana at `http://localhost:3000`
 2. Go to **Dashboards → New → Add Panel**
 3. Select **LLM Platform Ops** panel type
-4. Configure the gateway URL (default: `http://gateway.platform.svc.cluster.local:8000`)
+4. Configure the gateway URL (default: `/gateway-proxy` — proxied via nginx sidecar)
 
 ---
 

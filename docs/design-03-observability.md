@@ -832,10 +832,54 @@ spec:
 
 ## Grafana Configuration
 
+### Architecture: Nginx Reverse Proxy Sidecar
+
+The Grafana pod uses an **nginx sidecar** to solve browser-to-gateway connectivity.
+The Grafana plugin makes client-side `fetch()` calls, so it cannot use K8s internal
+DNS names (browsers can't resolve `.svc.cluster.local`). The nginx sidecar
+reverse-proxies `/gateway-proxy/` to the gateway's internal DNS, allowing the
+plugin to use a relative URL (`/gateway-proxy`) that works from any browser.
+
+```
+Browser :3000 → nginx → /             → Grafana :3001
+                      → /gateway-proxy/ → gateway.platform.svc:8000
+```
+
 ### Deployment
 
 ```yaml
 # k8s/base/observability/grafana-deployment.yaml
+#
+# nginx sidecar reverse-proxies browser requests so the
+# Grafana plugin can reach the gateway via a relative URL (/gateway-proxy/)
+# instead of needing the external ELB hostname.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-nginx-conf
+  namespace: observability
+data:
+  default.conf: |
+    server {
+        listen 3000;
+        client_max_body_size 10m;
+
+        location / {
+            proxy_pass http://127.0.0.1:3001;
+            proxy_set_header Host $host;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+        }
+
+        location /gateway-proxy/ {
+            proxy_pass http://gateway.platform.svc.cluster.local:8000/;
+            proxy_set_header Host $host;
+            proxy_connect_timeout 10s;
+            proxy_read_timeout 120s;
+        }
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -852,11 +896,30 @@ spec:
         app: grafana
     spec:
       containers:
-        - name: grafana
-          image: grafana/grafana:10.3.1
+        # --- nginx reverse proxy (port 3000, user-facing) ---
+        - name: nginx-proxy
+          image: nginx:1.25-alpine
           ports:
             - containerPort: 3000
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+        # --- Grafana (port 3001, internal only) ---
+        - name: grafana
+          image: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/grafana-plugin:dev-latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3001
           env:
+            - name: GF_SERVER_HTTP_PORT
+              value: "3001"
             - name: GF_SECURITY_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -864,6 +927,8 @@ spec:
                   key: admin-password
             - name: GF_INSTALL_PLUGINS
               value: "grafana-clock-panel,grafana-piechart-panel"
+            - name: GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS
+              value: "llmplatform-ops-panel"
           volumeMounts:
             - name: datasources
               mountPath: /etc/grafana/provisioning/datasources
@@ -871,8 +936,6 @@ spec:
               mountPath: /etc/grafana/provisioning/dashboards
             - name: dashboards
               mountPath: /var/lib/grafana/dashboards
-            - name: plugins
-              mountPath: /var/lib/grafana/plugins
           resources:
             requests:
               cpu: 200m
@@ -881,6 +944,9 @@ spec:
               cpu: "1"
               memory: 1Gi
       volumes:
+        - name: nginx-conf
+          configMap:
+            name: grafana-nginx-conf
         - name: datasources
           configMap:
             name: grafana-datasources
@@ -890,8 +956,6 @@ spec:
         - name: dashboards
           configMap:
             name: grafana-dashboards
-        - name: plugins
-          emptyDir: {} # Plugin installation directory
 ---
 apiVersion: v1
 kind: Service
@@ -899,6 +963,7 @@ metadata:
   name: grafana
   namespace: observability
 spec:
+  type: LoadBalancer
   selector:
     app: grafana
   ports:

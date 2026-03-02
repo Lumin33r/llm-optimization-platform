@@ -1245,15 +1245,28 @@ After the 3rd and 4th nodes joined, Tempo scheduled immediately. Prometheus requ
 
 ## 33. Grafana Plugin: Browser DNS Resolution Failure
 
-**Symptom:** Browser cannot resolve gateway.platform.svc.cluster.local.
-**Fix:** Changed default gatewayUrl to http://localhost:8000.
-**Files:** grafana-plugins/llm-platform-ops/src/module.ts
+**Symptom:** Browser cannot resolve `gateway.platform.svc.cluster.local` — `ERR_NAME_NOT_RESOLVED` in client-side `fetch()`.
+**Root Cause:** The Grafana plugin runs in the browser, which cannot resolve K8s internal DNS names.
+**Temporary Fix:** Changed `gatewayUrl` to the Gateway ELB hostname (fragile — changes if Service recreated).
+**Long-term Fix:** Added nginx reverse proxy sidecar to the Grafana pod. nginx listens on port 3000 and proxies `/gateway-proxy/` to `gateway.platform.svc.cluster.local:8000` (internal DNS). Dashboard and plugin use the relative URL `/gateway-proxy` which is resolved by the co-located nginx.
+**Architecture:**
+
+```
+Browser :3000 → nginx → /             → Grafana :3001
+                      → /gateway-proxy/ → gateway.platform.svc:8000
+```
+
+**Files:**
+
+- `k8s/base/observability/grafana-deployment.yaml` (nginx sidecar + ConfigMap)
+- `k8s/base/observability/grafana-dashboards.yaml` (gatewayUrl → `/gateway-proxy`)
+- `grafana-plugins/llm-platform-ops/src/module.ts` (default → `/gateway-proxy`)
 
 ---
 
 ## 34. Gateway: Missing Ops Router Registration
 
-**Symptom:** /ops/* returns 404.
+**Symptom:** /ops/\* returns 404.
 **Fix:** Added app.include_router(ops_router) to main.py.
 **Files:** services/gateway/main.py
 
@@ -1316,21 +1329,37 @@ After the 3rd and 4th nodes joined, Tempo scheduled immediately. Prometheus requ
 
 ## 42. Test Harness: Hard OTEL Dependency
 
-**Fix:** Made OTEL optional with try/except + _noop_span fallback.
+**Fix:** Made OTEL optional with try/except + \_noop_span fallback.
 **Files:** services/test-harness/harness.py
+
+---
+
+## 43. Benchmark Test Battery Integration
+
+**Symptom:** No automated way to run full platform benchmarks.
+**Fix:** Created 700-prompt benchmark system (250 quant, 250 finetune, 200 eval), added `POST /harness/benchmark` and `GET /harness/benchmark/{id}` endpoints to data-engine API, added "Run Benchmark" button to Grafana plugin HarnessConsole.
+**Files:**
+
+- `scripts/generate-benchmark.py`
+- `data/promptsets/benchmark-{quant,finetune,eval}/`
+- `services/data-engine/api.py`
+- `grafana-plugins/llm-platform-ops/src/components/HarnessConsole.tsx`
+- `grafana-plugins/llm-platform-ops/src/api/opsApi.ts`
 
 ---
 
 ## Final State (Post-Phase-8)
 
-| Service | Namespace | Status | Image Tag |
-|---------|-----------|--------|-----------|
-| gateway | platform | Running | dev-latest |
-| data-engine | platform | Running | dev-latest |
-| quant-api | quant | Running | dev-latest |
-| finetune-api | finetune | Running | dev-latest |
-| eval-api | eval | Running | dev-latest |
-| grafana | observability | Running | dev-latest |
-| prometheus | observability | Running | v2.49.0 |
+| Service      | Namespace     | Status  | Image Tag                           |
+| ------------ | ------------- | ------- | ----------------------------------- |
+| gateway      | platform      | Running | dev-latest                          |
+| data-engine  | platform      | Running | dev-latest                          |
+| quant-api    | quant         | Running | dev-latest                          |
+| finetune-api | finetune      | Running | dev-latest                          |
+| eval-api     | eval          | Running | dev-latest                          |
+| grafana      | observability | Running | dev-latest (custom + nginx sidecar) |
+| prometheus   | observability | Running | v2.49.0                             |
 
-**New endpoints:** GET /ops/promptsets, POST /ops/harness/run, GET /ops/harness/runs, GET /ops/harness/runs/{run_id}
+**New endpoints:** GET /ops/promptsets, POST /ops/harness/run, GET /ops/harness/runs, GET /ops/harness/runs/{run_id}, POST /harness/benchmark, GET /harness/benchmark/{id}
+
+**Nginx sidecar:** Grafana pod now runs 2/2 containers (nginx-proxy + grafana). Plugin uses `/gateway-proxy` relative URL.

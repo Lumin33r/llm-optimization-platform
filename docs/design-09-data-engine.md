@@ -105,14 +105,15 @@ flowchart TB
 
 **Purpose**: Prove endpoints are live, routing is correct, outputs are sane.
 
-| Property | Value |
-|----------|-------|
-| Size | 50–200 prompts |
-| Run Frequency | Every deploy + hourly |
-| Target Latency | < 2s p95 |
-| Expected Pass Rate | > 99.5% |
+| Property           | Value                 |
+| ------------------ | --------------------- |
+| Size               | 50–200 prompts        |
+| Run Frequency      | Every deploy + hourly |
+| Target Latency     | < 2s p95              |
+| Expected Pass Rate | > 99.5%               |
 
 **Grafana Metrics**:
+
 - `lab_canary_pass_rate{team, variant}`
 - `lab_canary_error_rate{team, variant}`
 - `lab_canary_latency_p95{team, variant}`
@@ -145,19 +146,19 @@ flowchart TB
 
 **Purpose**: Show queue depth, TTFT, p95 changes, autoscaling response.
 
-| Property | Value |
-|----------|-------|
-| Size | 500–2,000 prompts |
+| Property              | Value                 |
+| --------------------- | --------------------- |
+| Size                  | 500–2,000 prompts     |
 | Output Length Buckets | 50 / 200 / 800 tokens |
-| Concurrency Levels | 1, 5, 10, 20, 50 |
+| Concurrency Levels    | 1, 5, 10, 20, 50      |
 
 **Token Length Distribution**:
 
-| Bucket | Target Output Tokens | Prompt Count | Purpose |
-|--------|---------------------|--------------|---------|
-| short | 50 | 40% | Baseline latency |
-| medium | 200 | 40% | Typical workload |
-| long | 800 | 20% | Stress test / queue depth |
+| Bucket | Target Output Tokens | Prompt Count | Purpose                   |
+| ------ | -------------------- | ------------ | ------------------------- |
+| short  | 50                   | 40%          | Baseline latency          |
+| medium | 200                  | 40%          | Typical workload          |
+| long   | 800                  | 20%          | Stress test / queue depth |
 
 **Schema**:
 
@@ -173,6 +174,7 @@ flowchart TB
 ```
 
 **Grafana Metrics**:
+
 - `lab_llm_queue_depth{team}`
 - `lab_llm_ttft_ms{team, bucket}`
 - `lab_llm_e2e_duration_ms{team, bucket}`
@@ -182,21 +184,21 @@ flowchart TB
 
 **Purpose**: Detect quality degradation from 4-bit quantization (GPTQ/AWQ).
 
-| Property | Value |
-|----------|-------|
-| Size | 200–500 prompts |
+| Property    | Value                                               |
+| ----------- | --------------------------------------------------- |
+| Size        | 200–500 prompts                                     |
 | Focus Areas | Math/logic, structured output, multi-step reasoning |
-| Baseline | FP16 reference outputs |
+| Baseline    | FP16 reference outputs                              |
 
 **Sensitive Categories**:
 
-| Category | Description | Why Sensitive |
-|----------|-------------|---------------|
-| `math_logic` | Arithmetic, algebra, logic puzzles | Precision loss affects calculations |
-| `structured_json` | JSON output constraints | Format compliance degrades |
-| `multi_step` | Chain-of-thought (short context) | Reasoning chain breaks |
-| `code_gen` | Simple code generation | Syntax errors from quantization |
-| `numerical` | Number extraction/formatting | Digit accuracy |
+| Category          | Description                        | Why Sensitive                       |
+| ----------------- | ---------------------------------- | ----------------------------------- |
+| `math_logic`      | Arithmetic, algebra, logic puzzles | Precision loss affects calculations |
+| `structured_json` | JSON output constraints            | Format compliance degrades          |
+| `multi_step`      | Chain-of-thought (short context)   | Reasoning chain breaks              |
+| `code_gen`        | Simple code generation             | Syntax errors from quantization     |
+| `numerical`       | Number extraction/formatting       | Digit accuracy                      |
 
 **Schema**:
 
@@ -226,11 +228,11 @@ flowchart TB
 
 **Purpose**: Train LoRA adapters and validate against holdout sets.
 
-| Split | Size | Usage |
-|-------|------|-------|
-| `train` | 70% | Fine-tuning training data |
-| `eval_holdout` | 20% | Validation during training |
-| `canary_never_train` | 10% | Post-deployment regression detection |
+| Split                | Size | Usage                                |
+| -------------------- | ---- | ------------------------------------ |
+| `train`              | 70%  | Fine-tuning training data            |
+| `eval_holdout`       | 20%  | Validation during training           |
+| `canary_never_train` | 10%  | Post-deployment regression detection |
 
 **Schema**:
 
@@ -251,12 +253,12 @@ flowchart TB
 
 **Domain Packs**:
 
-| Domain | Description | Use Case |
-|--------|-------------|----------|
-| `legal` | Contract analysis, clause extraction | Legal AI assistant |
-| `medical` | Clinical notes, symptom analysis | Healthcare NLP |
+| Domain      | Description                           | Use Case             |
+| ----------- | ------------------------------------- | -------------------- |
+| `legal`     | Contract analysis, clause extraction  | Legal AI assistant   |
+| `medical`   | Clinical notes, symptom analysis      | Healthcare NLP       |
 | `financial` | Report summarization, risk assessment | FinTech applications |
-| `technical` | Documentation, code explanation | Developer tools |
+| `technical` | Documentation, code explanation       | Developer tools      |
 
 **A/B Testing Tags**:
 
@@ -279,12 +281,12 @@ flowchart TB
 
 **Metrics**:
 
-| Metric | Range | Description |
-|--------|-------|-------------|
-| `coherence` | 0.0–1.0 | Logical flow and readability |
-| `helpfulness` | 0.0–1.0 | Addresses user intent |
-| `factuality` | 0.0–1.0 | Accuracy (requires grounding) |
-| `toxicity` | 0.0–1.0 | Harmful content (lower is better) |
+| Metric        | Range   | Description                       |
+| ------------- | ------- | --------------------------------- |
+| `coherence`   | 0.0–1.0 | Logical flow and readability      |
+| `helpfulness` | 0.0–1.0 | Addresses user intent             |
+| `factuality`  | 0.0–1.0 | Accuracy (requires grounding)     |
+| `toxicity`    | 0.0–1.0 | Harmful content (lower is better) |
 
 **Schema**:
 
@@ -297,7 +299,7 @@ flowchart TB
   "ground_truth": "provided",
   "expected_scores": {
     "coherence": 0.85,
-    "helpfulness": 0.90,
+    "helpfulness": 0.9,
     "factuality": 0.95,
     "toxicity": 0.01
   }
@@ -361,11 +363,11 @@ flowchart LR
 
 **Seed Corpus**:
 
-| Source | Description | Volume |
-|--------|-------------|--------|
-| Synthetic | LLM-generated with diversity rules | 60% |
-| Curated | Human-reviewed, domain-specific | 30% |
-| Adversarial | Edge cases, known failure modes | 10% |
+| Source      | Description                        | Volume |
+| ----------- | ---------------------------------- | ------ |
+| Synthetic   | LLM-generated with diversity rules | 60%    |
+| Curated     | Human-reviewed, domain-specific    | 30%    |
+| Adversarial | Edge cases, known failure modes    | 10%    |
 
 **Scenario Templates**:
 
@@ -429,8 +431,8 @@ metadata:
     "max_tokens": 50
   },
   "target_buckets": {
-    "input_tokens": {"min": 10, "max": 100},
-    "output_tokens": {"buckets": [50]}
+    "input_tokens": { "min": 10, "max": 100 },
+    "output_tokens": { "buckets": [50] }
   },
   "checksum": "sha256:abc123...",
   "version": "1.0.0",
@@ -890,14 +892,14 @@ if __name__ == "__main__":
 
 Every request from the harness includes these tags for Grafana slicing:
 
-| Tag | Description | Example |
-|-----|-------------|---------|
-| `lab.promptset.id` | Versioned promptset identifier | `canary-v1-20260224` |
-| `lab.scenario.id` | Scenario type | `canary`, `perf_throughput`, `quant_sensitivity` |
-| `lab.dataset.id` | Dataset identifier | `canary-v1` |
-| `lab.run.id` | Unique run identifier | `run-20260224-100000` |
-| `lab.prompt.id` | Individual prompt ID | `canary-001` |
-| `lab.bucket` | Output length bucket | `short`, `medium`, `long` |
+| Tag                | Description                    | Example                                          |
+| ------------------ | ------------------------------ | ------------------------------------------------ |
+| `lab.promptset.id` | Versioned promptset identifier | `canary-v1-20260224`                             |
+| `lab.scenario.id`  | Scenario type                  | `canary`, `perf_throughput`, `quant_sensitivity` |
+| `lab.dataset.id`   | Dataset identifier             | `canary-v1`                                      |
+| `lab.run.id`       | Unique run identifier          | `run-20260224-100000`                            |
+| `lab.prompt.id`    | Individual prompt ID           | `canary-001`                                     |
+| `lab.bucket`       | Output length bucket           | `short`, `medium`, `long`                        |
 
 ### 4.2 Grafana Dashboard Queries
 
@@ -1208,23 +1210,23 @@ spec:
         - name: quant-api
           env:
             - name: STARTUP_DELAY_SECONDS
-              value: "60"  # Simulate model warmup
+              value: "60" # Simulate model warmup
           readinessProbe:
             httpGet:
               path: /ready
               port: 8000
             initialDelaySeconds: 10
             periodSeconds: 5
-            failureThreshold: 12  # 60s total
+            failureThreshold: 12 # 60s total
 ```
 
 **Expected Grafana Observations**:
 
-| Panel | Expected Behavior |
-|-------|-------------------|
-| Traffic by Pod | Traffic drops to 0 for slow-starting pod |
-| 5xx Error Rate | No increase (traffic gated properly) |
-| Ready Pod Count | Shows 1 → 2 transition after 60s |
+| Panel             | Expected Behavior                            |
+| ----------------- | -------------------------------------------- |
+| Traffic by Pod    | Traffic drops to 0 for slow-starting pod     |
+| 5xx Error Rate    | No increase (traffic gated properly)         |
+| Ready Pod Count   | Shows 1 → 2 transition after 60s             |
 | Routing Decisions | Shows `backend_unready` reason during warmup |
 
 **Prometheus Query**:
@@ -1270,18 +1272,18 @@ spec:
         - name: quant-api
           resources:
             requests:
-              cpu: "2"      # 3 replicas × 2 = 6 CPU (exceeds 2)
+              cpu: "2" # 3 replicas × 2 = 6 CPU (exceeds 2)
               memory: 4Gi
 ```
 
 **Expected Grafana Observations**:
 
-| Panel | Expected Behavior |
-|-------|-------------------|
-| Pod Status | Pods stuck in Pending |
-| Rollout Progress | Shows 0/3 available |
-| Quota Usage | At 100% for CPU |
-| Traffic | No shift to new deployment |
+| Panel            | Expected Behavior          |
+| ---------------- | -------------------------- |
+| Pod Status       | Pods stuck in Pending      |
+| Rollout Progress | Shows 0/3 available        |
+| Quota Usage      | At 100% for CPU            |
+| Traffic          | No shift to new deployment |
 
 **Prometheus Query**:
 
@@ -1318,12 +1320,12 @@ python harness.py \
 
 **Expected Grafana Observations**:
 
-| Panel | Expected Behavior |
-|-------|-------------------|
-| FastAPI Status Codes | 504 spike for long bucket |
-| SageMaker ModelLatency | Normal (~10s for long) |
+| Panel                        | Expected Behavior                                  |
+| ---------------------------- | -------------------------------------------------- |
+| FastAPI Status Codes         | 504 spike for long bucket                          |
+| SageMaker ModelLatency       | Normal (~10s for long)                             |
 | App Timeout vs Model Latency | Clear gap showing platform timeout triggered early |
-| Error Type Distribution | `timeout` errors spike |
+| Error Type Distribution      | `timeout` errors spike                             |
 
 **Prometheus Queries**:
 
@@ -1384,16 +1386,16 @@ echo "Review Grafana dashboards for observability validation"
 
 ### 7.1 REST API Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/promptsets` | GET | List all promptsets |
-| `/promptsets/{id}` | GET | Get promptset details |
-| `/promptsets` | POST | Create new promptset |
-| `/runs` | GET | List harness runs |
-| `/runs/{id}` | GET | Get run results |
-| `/runs` | POST | Start new harness run |
-| `/harness/benchmark` | POST | Start full benchmark (all 3 teams, 700 prompts) |
-| `/harness/benchmark/{id}` | GET | Get benchmark status/results |
+| Endpoint                  | Method | Description                                     |
+| ------------------------- | ------ | ----------------------------------------------- |
+| `/promptsets`             | GET    | List all promptsets                             |
+| `/promptsets/{id}`        | GET    | Get promptset details                           |
+| `/promptsets`             | POST   | Create new promptset                            |
+| `/runs`                   | GET    | List harness runs                               |
+| `/runs/{id}`              | GET    | Get run results                                 |
+| `/runs`                   | POST   | Start new harness run                           |
+| `/harness/benchmark`      | POST   | Start full benchmark (all 3 teams, 700 prompts) |
+| `/harness/benchmark/{id}` | GET    | Get benchmark status/results                    |
 
 > **See also:** [design-12-benchmark.md](design-12-benchmark.md) for the full benchmark test battery specification.
 
@@ -1511,12 +1513,14 @@ async def get_run(run_id: str):
 ## Implementation Checklist
 
 ### Data Engine Setup
+
 - [ ] S3 bucket created with versioning enabled
 - [ ] Promptset generator implemented
 - [ ] Manifest schema validated
 - [ ] Token counting with tiktoken
 
 ### Required Datasets
+
 - [ ] Canary promptset (50–200 prompts)
 - [ ] Performance promptset (500–2000 prompts, 3 buckets)
 - [ ] Quant-sensitivity promptset (200–500 prompts)
@@ -1524,6 +1528,7 @@ async def get_run(run_id: str):
 - [ ] Eval rubric set with grounded examples
 
 ### Test Harness
+
 - [ ] Concurrent request execution
 - [ ] Response validation logic
 - [ ] Telemetry tagging (promptset.id, scenario.id, run.id)
@@ -1531,6 +1536,7 @@ async def get_run(run_id: str):
 - [ ] CLI and API interfaces
 
 ### Observability Integration
+
 - [ ] Grafana dashboards for harness metrics
 - [ ] Latency by scenario panels
 - [ ] Error rate by scenario panels
@@ -1538,12 +1544,14 @@ async def get_run(run_id: str):
 - [ ] Tempo trace search by run.id
 
 ### Team Workflows
+
 - [ ] Quant comparison script
 - [ ] Fine-tune A/B testing script
 - [ ] Eval scoring pipeline
 - [ ] Daily ranking job
 
 ### Controlled Failures
+
 - [ ] Readiness-gated traffic demo
 - [ ] Quota rejection demo
 - [ ] SageMaker timeout demo
@@ -1551,6 +1559,7 @@ async def get_run(run_id: str):
 - [ ] Grafana panels showing expected behavior
 
 ### Benchmark Test Battery
+
 - [x] Benchmark promptset generator (`scripts/generate-benchmark.py`)
 - [x] benchmark-quant: 250 prompts (5 categories)
 - [x] benchmark-finetune: 250 prompts (5 categories)
