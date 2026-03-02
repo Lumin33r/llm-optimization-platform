@@ -33,7 +33,7 @@ export const HarnessConsole: React.FC<Props> = ({ api }) => {
         setRuns(rs);
         setError(null);
         if (ps.length > 0 && !selectedPromptset) {
-          setSelectedPromptset(ps[0].dataset_id.split('-')[0] || 'canary');
+            setSelectedPromptset(ps[0].dataset_id || 'canary');
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load');
@@ -108,12 +108,8 @@ export const HarnessConsole: React.FC<Props> = ({ api }) => {
     }
   };
 
-  // Derive promptset name from dataset_id (e.g. "canary-deployment-health" -> "canary")
-  const promptsetNames = promptsets.map(p => {
-    const parts = p.dataset_id.split('-');
-    return parts[0]; // "canary" or "performance"
-  });
-  const uniqueNames = [...new Set(promptsetNames)];
+// Use full dataset_id as the promptset selector (matches directory or resolved by data-engine)
+    const uniqueNames = [...new Set(promptsets.map(p => p.dataset_id))];
 
   return (
     <div className={styles.container}>
@@ -275,7 +271,7 @@ export const HarnessConsole: React.FC<Props> = ({ api }) => {
         <div className={styles.infoBar}>
           {promptsets.map(p => (
             <span key={p.promptset_id} className={styles.infoBadge}>
-              {p.dataset_id.split('-')[0]}: {p.prompt_count} prompts
+              {p.dataset_id}: {p.prompt_count} prompts
             </span>
           ))}
         </div>

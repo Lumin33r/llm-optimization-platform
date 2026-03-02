@@ -219,17 +219,33 @@ async def _execute_run(run_id: str, promptset_name: str, team: str,
 @app.post("/harness/run", response_model=HarnessRunSummary)
 async def start_harness_run(req: HarnessRunRequest, bg: BackgroundTasks):
     """Start a harness run against a promptset."""
-    # Validate promptset exists
-    promptset_path = DATA_DIR / req.promptset / "promptset.jsonl"
+    # Validate promptset exists — try direct directory match first,
+    # then fall back to matching by dataset_id in manifests
+    promptset_name = req.promptset
+    promptset_path = DATA_DIR / promptset_name / "promptset.jsonl"
     if not promptset_path.exists():
-        raise HTTPException(404, f"Promptset '{req.promptset}' not found")
+        # Scan manifests for a dataset_id match
+        resolved = False
+        if DATA_DIR.exists():
+            for subdir in DATA_DIR.iterdir():
+                mp = subdir / "manifest.json"
+                if mp.exists():
+                    with open(mp) as mf:
+                        manifest = json.load(mf)
+                    if manifest.get("dataset_id") == req.promptset:
+                        promptset_name = subdir.name
+                        promptset_path = subdir / "promptset.jsonl"
+                        resolved = True
+                        break
+        if not resolved:
+            raise HTTPException(404, f"Promptset '{req.promptset}' not found")
 
     run_id = f"run-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
 
     _runs[run_id] = {
         "run_id": run_id,
         "status": "pending",
-        "promptset": req.promptset,
+        "promptset": promptset_name,
         "team": req.team,
         "variant": req.variant,
         "total": 0,
@@ -242,7 +258,7 @@ async def start_harness_run(req: HarnessRunRequest, bg: BackgroundTasks):
         "errors": [],
     }
 
-    bg.add_task(_execute_run, run_id, req.promptset, req.team,
+    bg.add_task(_execute_run, run_id, promptset_name, req.team,
                 req.variant, req.concurrency, req.max_prompts)
 
     return HarnessRunSummary(**_runs[run_id])

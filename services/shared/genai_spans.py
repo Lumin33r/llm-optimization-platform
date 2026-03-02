@@ -17,23 +17,34 @@ class GenAISpanContext:
 
     def __init__(
         self,
-        span_name: str,
-        model_variant_type: str,
-        model_variant_id: str,
-        sagemaker_endpoint: str,
-        base_model_id: Optional[str] = None
+        span_name: str = "genai.predict",
+        model_variant_type: str = "",
+        model_variant_id: str = "",
+        sagemaker_endpoint: str = "",
+        base_model_id: Optional[str] = None,
+        # Accept alternate kwarg names used by team APIs
+        tracer=None,
+        operation_name: Optional[str] = None,
+        model_name: Optional[str] = None,
+        variant_type: Optional[str] = None,
+        variant_id: Optional[str] = None,
+        endpoint_name: Optional[str] = None,
     ):
-        self.span_name = span_name
-        self.model_variant_type = model_variant_type
-        self.model_variant_id = model_variant_id
-        self.sagemaker_endpoint = sagemaker_endpoint
+        # Resolve alternate names (callers pass e.g. operation_name= instead of span_name=)
+        self.span_name = operation_name or span_name
+        self.model_variant_type = variant_type or model_variant_type
+        self.model_variant_id = variant_id or model_variant_id
+        self.sagemaker_endpoint = endpoint_name or sagemaker_endpoint
         self.base_model_id = base_model_id
+        self.model_name = model_name
+        # Use caller's tracer if provided, else the module-level one
+        self._tracer = tracer or globals().get("tracer", trace.get_tracer("genai"))
         self.span = None
         self.start_time = None
         self.first_token_time = None
 
     def __enter__(self):
-        self.span = tracer.start_span(self.span_name)
+        self.span = self._tracer.start_span(self.span_name)
         self.start_time = time.perf_counter()
 
         # Set initial attributes
@@ -43,6 +54,9 @@ class GenAISpanContext:
         self.span.set_attribute("lab.model.variant.type", self.model_variant_type)
         self.span.set_attribute("lab.model.variant.id", self.model_variant_id)
         self.span.set_attribute("lab.sagemaker.endpoint.name", self.sagemaker_endpoint)
+
+        if self.model_name:
+            self.span.set_attribute("lab.model.name", self.model_name)
 
         if self.base_model_id:
             self.span.set_attribute("lab.model.base.id", self.base_model_id)
