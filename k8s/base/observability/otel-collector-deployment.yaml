@@ -13,7 +13,15 @@ metadata:
   name: otel-collector
 rules:
   - apiGroups: [""]
-    resources: ["pods", "namespaces", "services", "nodes", "resourcequotas", "replicationcontrollers"]
+    resources:
+      [
+        "pods",
+        "namespaces",
+        "services",
+        "nodes",
+        "resourcequotas",
+        "replicationcontrollers",
+      ]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["apps"]
     resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]

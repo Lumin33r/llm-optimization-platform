@@ -30,7 +30,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: finetune-api
-          image: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/finetune-api:latest
+          image: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/finetune-api:dev-latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8000

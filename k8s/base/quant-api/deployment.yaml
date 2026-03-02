@@ -30,7 +30,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: quant-api
-          image: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/quant-api:latest
+          image: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/quant-api:dev-latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8000

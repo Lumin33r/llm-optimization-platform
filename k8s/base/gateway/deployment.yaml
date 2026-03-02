@@ -30,7 +30,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: gateway
-          image: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/gateway:latest
+          image: 388691194728.dkr.ecr.us-west-2.amazonaws.com/llmplatform-dev/gateway:dev-latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
