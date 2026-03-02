@@ -1,0 +1,27 @@
+{
+  "promptset_id": "benchmark-finetune-20260301",
+  "scenario_id": "benchmark-finetune-v1",
+  "dataset_id": "benchmark-finetune",
+  "created_at": "2026-03-02T02:44:38.192082Z",
+  "seed": 42,
+  "prompt_count": 250,
+  "expected_output_schema": {
+    "format": "text"
+  },
+  "target_buckets": {
+    "input_tokens": {
+      "min": 10,
+      "max": 500
+    },
+    "output_tokens": {
+      "buckets": [
+        50,
+        200,
+        800
+      ]
+    }
+  },
+  "checksum": "sha256:692cc3e4967cef25d2101e2901e3694ed3f5a5373444b4b52fba81d5365cc2bb",
+  "version": "1.0.0",
+  "compatible_harness_version": ">=2.0.0"
+}

@@ -1,6 +1,6 @@
 import { css } from '@emotion/css';
 import React, { useEffect, useState } from 'react';
-import { HarnessRunSummary, OpsApi, PromptsetInfo } from '../api/opsApi';
+import { BenchmarkRunSummary, HarnessRunSummary, OpsApi, PromptsetInfo } from '../api/opsApi';
 
 interface Props {
   api: OpsApi;
@@ -18,6 +18,8 @@ export const HarnessConsole: React.FC<Props> = ({ api }) => {
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(false);
+  const [benchmarkRunning, setBenchmarkRunning] = useState(false);
+  const [benchmarkResult, setBenchmarkResult] = useState<BenchmarkRunSummary | null>(null);
 
   // Load promptsets and runs on mount
   useEffect(() => {
@@ -44,18 +46,26 @@ export const HarnessConsole: React.FC<Props> = ({ api }) => {
   // Poll running jobs every 5s
   useEffect(() => {
     const hasRunning = runs.some(r => r.status === 'running' || r.status === 'pending');
-    if (!hasRunning) return;
+    const hasBenchmarkRunning = benchmarkResult && (benchmarkResult.status === 'running' || benchmarkResult.status === 'pending');
+    if (!hasRunning && !hasBenchmarkRunning) return;
 
     const interval = setInterval(async () => {
       try {
         const updated = await api.getHarnessRuns();
         setRuns(updated);
+        if (hasBenchmarkRunning && benchmarkResult) {
+          const bm = await api.getBenchmarkRun(benchmarkResult.benchmark_id);
+          setBenchmarkResult(bm);
+          if (bm.status === 'completed' || bm.status === 'failed') {
+            setBenchmarkRunning(false);
+          }
+        }
       } catch { /* ignore */ }
     }, 5000);
 
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runs.some(r => r.status === 'running' || r.status === 'pending')]);
+  }, [runs.some(r => r.status === 'running' || r.status === 'pending'), benchmarkResult?.status]);
 
   const startRun = async () => {
     setLaunching(true);
@@ -72,6 +82,19 @@ export const HarnessConsole: React.FC<Props> = ({ api }) => {
       setError(err instanceof Error ? err.message : 'Failed to start run');
     } finally {
       setLaunching(false);
+    }
+  };
+
+  const startBenchmark = async () => {
+    setBenchmarkRunning(true);
+    setError(null);
+    setBenchmarkResult(null);
+    try {
+      const result = await api.startBenchmark({ concurrency });
+      setBenchmarkResult(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start benchmark');
+      setBenchmarkRunning(false);
     }
   };
 
@@ -163,7 +186,7 @@ export const HarnessConsole: React.FC<Props> = ({ api }) => {
           <input
             type="number"
             min={1}
-            max={1000}
+            max={5000}
             value={maxPrompts ?? ''}
             onChange={e => setMaxPrompts(e.target.value ? parseInt(e.target.value) : undefined)}
             placeholder="All"
@@ -178,9 +201,74 @@ export const HarnessConsole: React.FC<Props> = ({ api }) => {
         >
           {launching ? 'Starting...' : 'Run Harness'}
         </button>
+
+        <button
+          className={styles.benchmarkButton}
+          onClick={startBenchmark}
+          disabled={benchmarkRunning || launching}
+          title="Run all 3 teams (quant, finetune, eval) with 700 benchmark prompts"
+        >
+          {benchmarkRunning ? `Benchmark ${benchmarkResult ? Object.values(benchmarkResult.team_status).filter(s => s === 'completed').length + '/3' : '...'}` : 'Run Benchmark'}
+        </button>
       </div>
 
       {error && <div className={styles.errorMessage}>{error}</div>}
+
+      {/* Benchmark Results */}
+      {benchmarkResult && (
+        <div className={styles.benchmarkBox}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <strong style={{ color: '#ff9830' }}>Benchmark: {benchmarkResult.benchmark_id.slice(-10)}</strong>
+            <span
+              className={styles.statusBadge}
+              style={{ backgroundColor: getStatusColor(benchmarkResult.status) }}
+            >
+              {benchmarkResult.status}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            {Object.entries(benchmarkResult.team_status).map(([team, status]) => (
+              <span key={team} style={{
+                background: '#333',
+                padding: '3px 8px',
+                borderRadius: 4,
+                fontSize: 11,
+                color: status === 'completed' ? '#73bf69' : status === 'running' ? '#3871dc' : status === 'failed' ? '#ff5555' : '#aaa',
+              }}>
+                {team}: {status}
+              </span>
+            ))}
+          </div>
+          {benchmarkResult.summary && Object.keys(benchmarkResult.summary).length > 0 && (
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Team</th>
+                  <th>Total</th>
+                  <th>Passed</th>
+                  <th>Failed</th>
+                  <th>Pass Rate</th>
+                  <th>Avg Latency</th>
+                  <th>Tok/s</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(benchmarkResult.summary).map(([team, s]) => (
+                  <tr key={team}>
+                    <td style={{ fontWeight: 500 }}>{team}</td>
+                    <td>{s.total}</td>
+                    <td style={{ color: '#73bf69' }}>{s.passed}</td>
+                    <td style={{ color: s.failed > 0 ? '#ff5555' : '#8e8e8e' }}>{s.failed}</td>
+                    <td>{s.pass_rate}%</td>
+                    <td>{s.avg_latency_ms.toFixed(0)}ms</td>
+                    <td>{s.avg_tokens_per_second ? s.avg_tokens_per_second.toFixed(1) : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       {/* Promptset Info */}
       {promptsets.length > 0 && (
@@ -364,6 +452,33 @@ const getStyles = () => ({
       background: #444;
       cursor: not-allowed;
     }
+  `,
+  benchmarkButton: css`
+    padding: 8px 16px;
+    background: #c05a1c;
+    border: none;
+    border-radius: 4px;
+    color: #fff;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 12px;
+
+    &:hover {
+      background: #e06e2c;
+    }
+
+    &:disabled {
+      background: #555;
+      cursor: not-allowed;
+    }
+  `,
+  benchmarkBox: css`
+    background: #1a1a2a;
+    border: 1px solid #3a3a55;
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 12px;
+    font-size: 12px;
   `,
   errorMessage: css`
     color: #ff5555;

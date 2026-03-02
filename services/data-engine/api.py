@@ -23,6 +23,14 @@ GATEWAY_URL = os.getenv("GATEWAY_URL", "http://gateway.platform.svc.cluster.loca
 
 # In-memory run store (survives for pod lifetime)
 _runs: Dict[str, dict] = {}
+_benchmarks: Dict[str, dict] = {}
+
+# Benchmark team → promptset mapping
+BENCHMARK_MAP = {
+    "quant": "benchmark-quant",
+    "finetune": "benchmark-finetune",
+    "eval": "benchmark-eval",
+}
 
 
 # --------------- Models ---------------
@@ -60,6 +68,20 @@ class HarnessRunSummary(BaseModel):
     started_at: str
     completed_at: Optional[str] = None
     errors: List[str] = []
+
+
+class BenchmarkRunRequest(BaseModel):
+    concurrency: int = 10
+
+
+class BenchmarkRunSummary(BaseModel):
+    benchmark_id: str
+    status: str           # pending, running, completed, failed
+    team_runs: Dict[str, str] = {}   # team -> run_id
+    team_status: Dict[str, str] = {} # team -> status
+    started_at: str
+    completed_at: Optional[str] = None
+    summary: Optional[Dict] = None   # per-team aggregated results
 
 
 # --------------- Health endpoints ---------------
@@ -239,3 +261,100 @@ async def get_run(run_id: str):
     if run_id not in _runs:
         raise HTTPException(404, f"Run '{run_id}' not found")
     return HarnessRunSummary(**_runs[run_id])
+
+
+# --------------- Benchmark endpoints ---------------
+
+async def _execute_benchmark(benchmark_id: str, concurrency: int):
+    """Run all 3 team benchmarks sequentially and aggregate results."""
+    _benchmarks[benchmark_id]["status"] = "running"
+    try:
+        for team, promptset_name in BENCHMARK_MAP.items():
+            promptset_path = DATA_DIR / promptset_name / "promptset.jsonl"
+            if not promptset_path.exists():
+                _benchmarks[benchmark_id]["team_status"][team] = "skipped"
+                continue
+
+            run_id = f"bench-{team}-{benchmark_id.split('-')[-1]}"
+            _benchmarks[benchmark_id]["team_runs"][team] = run_id
+            _benchmarks[benchmark_id]["team_status"][team] = "running"
+
+            _runs[run_id] = {
+                "run_id": run_id,
+                "status": "running",
+                "promptset": promptset_name,
+                "team": team,
+                "variant": None,
+                "total": 0,
+                "passed": 0,
+                "failed": 0,
+                "pass_rate": 0.0,
+                "avg_latency_ms": 0.0,
+                "started_at": datetime.utcnow().isoformat() + "Z",
+                "completed_at": None,
+                "errors": [],
+            }
+
+            await _execute_run(run_id, promptset_name, team, None, concurrency, None)
+
+            _benchmarks[benchmark_id]["team_status"][team] = _runs[run_id]["status"]
+
+        # Aggregate summary
+        summary = {}
+        for team, run_id in _benchmarks[benchmark_id]["team_runs"].items():
+            if run_id in _runs:
+                r = _runs[run_id]
+                summary[team] = {
+                    "total": r["total"],
+                    "passed": r["passed"],
+                    "failed": r["failed"],
+                    "pass_rate": r.get("pass_rate", 0),
+                    "avg_latency_ms": r.get("avg_latency_ms", 0),
+                    "avg_tokens_per_second": r.get("avg_tokens_per_second", 0),
+                    "category_breakdown": r.get("category_breakdown"),
+                }
+
+        all_failed = all(s == "failed" for s in _benchmarks[benchmark_id]["team_status"].values())
+        _benchmarks[benchmark_id].update({
+            "status": "failed" if all_failed else "completed",
+            "completed_at": datetime.utcnow().isoformat() + "Z",
+            "summary": summary,
+        })
+
+    except Exception as exc:
+        _benchmarks[benchmark_id].update({
+            "status": "failed",
+            "completed_at": datetime.utcnow().isoformat() + "Z",
+            "summary": {"error": str(exc)},
+        })
+
+
+@app.post("/harness/benchmark", response_model=BenchmarkRunSummary)
+async def start_benchmark(req: BenchmarkRunRequest, bg: BackgroundTasks):
+    """Start a full benchmark run across all teams."""
+    # Validate that at least one benchmark promptset exists
+    found = [t for t, ps in BENCHMARK_MAP.items() if (DATA_DIR / ps / "promptset.jsonl").exists()]
+    if not found:
+        raise HTTPException(404, "No benchmark promptsets found. Run generate-benchmark.py first.")
+
+    benchmark_id = f"benchmark-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
+    _benchmarks[benchmark_id] = {
+        "benchmark_id": benchmark_id,
+        "status": "pending",
+        "team_runs": {},
+        "team_status": {t: "pending" for t in BENCHMARK_MAP},
+        "started_at": datetime.utcnow().isoformat() + "Z",
+        "completed_at": None,
+        "summary": None,
+    }
+
+    bg.add_task(_execute_benchmark, benchmark_id, req.concurrency)
+    return BenchmarkRunSummary(**_benchmarks[benchmark_id])
+
+
+@app.get("/harness/benchmark/{benchmark_id}", response_model=BenchmarkRunSummary)
+async def get_benchmark(benchmark_id: str):
+    """Get benchmark run status and results."""
+    if benchmark_id not in _benchmarks:
+        raise HTTPException(404, f"Benchmark '{benchmark_id}' not found")
+    return BenchmarkRunSummary(**_benchmarks[benchmark_id])

@@ -1392,6 +1392,10 @@ echo "Review Grafana dashboards for observability validation"
 | `/runs` | GET | List harness runs |
 | `/runs/{id}` | GET | Get run results |
 | `/runs` | POST | Start new harness run |
+| `/harness/benchmark` | POST | Start full benchmark (all 3 teams, 700 prompts) |
+| `/harness/benchmark/{id}` | GET | Get benchmark status/results |
+
+> **See also:** [design-12-benchmark.md](design-12-benchmark.md) for the full benchmark test battery specification.
 
 ### 7.2 FastAPI Implementation
 
@@ -1545,3 +1549,12 @@ async def get_run(run_id: str):
 - [ ] SageMaker timeout demo
 - [ ] Failure demo script
 - [ ] Grafana panels showing expected behavior
+
+### Benchmark Test Battery
+- [x] Benchmark promptset generator (`scripts/generate-benchmark.py`)
+- [x] benchmark-quant: 250 prompts (5 categories)
+- [x] benchmark-finetune: 250 prompts (5 categories)
+- [x] benchmark-eval: 200 prompts (4 categories)
+- [x] POST /harness/benchmark endpoint
+- [x] "Run Benchmark" button in Grafana Test Harness panel
+- [x] Design doc: [design-12-benchmark.md](design-12-benchmark.md)

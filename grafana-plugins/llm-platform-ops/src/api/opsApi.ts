@@ -80,6 +80,28 @@ export interface HarnessRunSummary {
   errors: string[];
 }
 
+export interface BenchmarkRunRequest {
+  concurrency: number;
+}
+
+export interface BenchmarkRunSummary {
+  benchmark_id: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  team_runs: Record<string, string>;
+  team_status: Record<string, string>;
+  started_at: string;
+  completed_at?: string;
+  summary?: Record<string, {
+    total: number;
+    passed: number;
+    failed: number;
+    pass_rate: number;
+    avg_latency_ms: number;
+    avg_tokens_per_second: number;
+    category_breakdown?: Record<string, { total: number; passed: number }>;
+  }>;
+}
+
 export interface ScoreRequest {
   prompt: string;
   response: string;
@@ -153,6 +175,22 @@ export class OpsApi {
 
   async getHarnessRun(runId: string): Promise<HarnessRunSummary> {
     const response = await fetch(`${this.baseUrl}/ops/harness/runs/${runId}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }
+
+  async startBenchmark(request: BenchmarkRunRequest): Promise<BenchmarkRunSummary> {
+    const response = await fetch(`${this.baseUrl}/ops/harness/benchmark`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }
+
+  async getBenchmarkRun(benchmarkId: string): Promise<BenchmarkRunSummary> {
+    const response = await fetch(`${this.baseUrl}/ops/harness/benchmark/${benchmarkId}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.json();
   }
