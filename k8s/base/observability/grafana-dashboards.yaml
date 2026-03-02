@@ -56,7 +56,7 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "count(up{app=~\"mistral-7b-.*\"} == 1)",
+              "expr": "count(up{app=~\"mistral-7b-.*\",job=\"vllm-models\"} == 1)",
               "legendFormat": ""
             }
           ],
@@ -97,7 +97,7 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "sum(rate(vllm:request_success_total{app=~\"mistral-7b-.*\"}[5m]))",
+              "expr": "sum(rate(vllm:request_success_total{app=~\"mistral-7b-.*\",job=\"vllm-models\"}[5m]))",
               "legendFormat": ""
             }
           ],
@@ -129,7 +129,7 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "avg(histogram_quantile(0.95, sum by (le,app)(rate(vllm:e2e_request_latency_seconds_bucket{app=~\"mistral-7b-.*\"}[5m]))))",
+              "expr": "avg(histogram_quantile(0.95, sum by (le,app)(rate(vllm:e2e_request_latency_seconds_bucket{app=~\"mistral-7b-.*\",job=\"vllm-models\"}[5m]))))",
               "legendFormat": ""
             }
           ],
@@ -170,7 +170,7 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "sum(vllm:num_requests_waiting{app=~\"mistral-7b-.*\"})",
+              "expr": "sum(vllm:num_requests_waiting{app=~\"mistral-7b-.*\",job=\"vllm-models\"})",
               "legendFormat": ""
             }
           ],
@@ -210,7 +210,7 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "avg(vllm:avg_generation_throughput_toks_per_s{app=~\"mistral-7b-.*\"})",
+              "expr": "avg(vllm:avg_generation_throughput_toks_per_s{app=~\"mistral-7b-.*\",job=\"vllm-models\"})",
               "legendFormat": ""
             }
           ],
@@ -242,7 +242,7 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "avg(vllm:gpu_cache_usage_perc{app=~\"mistral-7b-.*\"}) * 100",
+              "expr": "avg(vllm:gpu_cache_usage_perc{app=~\"mistral-7b-.*\",job=\"vllm-models\"}) * 100",
               "legendFormat": ""
             }
           ],
@@ -296,11 +296,11 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-awq\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-awq\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "AWQ (4-bit)"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-fp16\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "FP16 Baseline"
             }
           ],
@@ -328,11 +328,11 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "vllm:avg_generation_throughput_toks_per_s{app=\"mistral-7b-awq\"}",
+              "expr": "vllm:avg_generation_throughput_toks_per_s{app=\"mistral-7b-awq\",job=\"vllm-models\"}",
               "legendFormat": "AWQ (4-bit)"
             },
             {
-              "expr": "vllm:avg_generation_throughput_toks_per_s{app=\"mistral-7b-fp16\"}",
+              "expr": "vllm:avg_generation_throughput_toks_per_s{app=\"mistral-7b-fp16\",job=\"vllm-models\"}",
               "legendFormat": "FP16 Baseline"
             }
           ],
@@ -360,11 +360,11 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-awq\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-awq\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "AWQ (4-bit)"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-fp16\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "FP16 Baseline"
             }
           ],
@@ -392,11 +392,11 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-awq\"} * 100",
+              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-awq\",job=\"vllm-models\"} * 100",
               "legendFormat": "AWQ (4-bit)"
             },
             {
-              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-fp16\"} * 100",
+              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-fp16\",job=\"vllm-models\"} * 100",
               "legendFormat": "FP16 Baseline"
             }
           ],
@@ -425,11 +425,11 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_per_output_token_seconds_bucket{app=\"mistral-7b-awq\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_per_output_token_seconds_bucket{app=\"mistral-7b-awq\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "AWQ (4-bit)"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_per_output_token_seconds_bucket{app=\"mistral-7b-fp16\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_per_output_token_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "FP16 Baseline"
             }
           ],
@@ -457,11 +457,11 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "vllm:generation_tokens_total{app=\"mistral-7b-awq\"}",
+              "expr": "vllm:generation_tokens_total{app=\"mistral-7b-awq\",job=\"vllm-models\"}",
               "legendFormat": "AWQ (4-bit)"
             },
             {
-              "expr": "vllm:generation_tokens_total{app=\"mistral-7b-fp16\"}",
+              "expr": "vllm:generation_tokens_total{app=\"mistral-7b-fp16\",job=\"vllm-models\"}",
               "legendFormat": "FP16 Baseline"
             }
           ],
@@ -502,11 +502,11 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-lora\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-lora\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "LoRA"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-fp16\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "FP16 Baseline"
             }
           ],
@@ -534,11 +534,11 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "vllm:avg_generation_throughput_toks_per_s{app=\"mistral-7b-lora\"}",
+              "expr": "vllm:avg_generation_throughput_toks_per_s{app=\"mistral-7b-lora\",job=\"vllm-models\"}",
               "legendFormat": "LoRA"
             },
             {
-              "expr": "vllm:avg_generation_throughput_toks_per_s{app=\"mistral-7b-fp16\"}",
+              "expr": "vllm:avg_generation_throughput_toks_per_s{app=\"mistral-7b-fp16\",job=\"vllm-models\"}",
               "legendFormat": "FP16 Baseline"
             }
           ],
@@ -566,11 +566,11 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-lora\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-lora\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "LoRA"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-fp16\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "FP16 Baseline"
             }
           ],
@@ -598,11 +598,11 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-lora\"} * 100",
+              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-lora\",job=\"vllm-models\"} * 100",
               "legendFormat": "LoRA"
             },
             {
-              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-fp16\"} * 100",
+              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-fp16\",job=\"vllm-models\"} * 100",
               "legendFormat": "FP16 Baseline"
             }
           ],
@@ -631,11 +631,11 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_per_output_token_seconds_bucket{app=\"mistral-7b-lora\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_per_output_token_seconds_bucket{app=\"mistral-7b-lora\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "LoRA"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_per_output_token_seconds_bucket{app=\"mistral-7b-fp16\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_per_output_token_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "FP16 Baseline"
             }
           ],
@@ -663,11 +663,11 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "vllm:generation_tokens_total{app=\"mistral-7b-lora\"}",
+              "expr": "vllm:generation_tokens_total{app=\"mistral-7b-lora\",job=\"vllm-models\"}",
               "legendFormat": "LoRA"
             },
             {
-              "expr": "vllm:generation_tokens_total{app=\"mistral-7b-fp16\"}",
+              "expr": "vllm:generation_tokens_total{app=\"mistral-7b-fp16\",job=\"vllm-models\"}",
               "legendFormat": "FP16 Baseline"
             }
           ],
@@ -708,7 +708,7 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-judge\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-judge\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "Judge P95"
             }
           ],
@@ -736,7 +736,7 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "vllm:avg_generation_throughput_toks_per_s{app=\"mistral-7b-judge\"}",
+              "expr": "vllm:avg_generation_throughput_toks_per_s{app=\"mistral-7b-judge\",job=\"vllm-models\"}",
               "legendFormat": "Judge tok/s"
             }
           ],
@@ -764,7 +764,7 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-judge\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-judge\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "Judge P95"
             }
           ],
@@ -792,7 +792,7 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-judge\"} * 100",
+              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-judge\",job=\"vllm-models\"} * 100",
               "legendFormat": "Judge Cache %"
             }
           ],
@@ -821,11 +821,11 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "vllm:num_requests_running{app=\"mistral-7b-judge\"}",
+              "expr": "vllm:num_requests_running{app=\"mistral-7b-judge\",job=\"vllm-models\"}",
               "legendFormat": "Running"
             },
             {
-              "expr": "vllm:num_requests_waiting{app=\"mistral-7b-judge\"}",
+              "expr": "vllm:num_requests_waiting{app=\"mistral-7b-judge\",job=\"vllm-models\"}",
               "legendFormat": "Waiting"
             }
           ],
@@ -852,7 +852,7 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "rate(vllm:generation_tokens_total{app=\"mistral-7b-judge\"}[5m]) / rate(vllm:request_success_total{app=\"mistral-7b-judge\"}[5m])",
+              "expr": "rate(vllm:generation_tokens_total{app=\"mistral-7b-judge\",job=\"vllm-models\"}[5m]) / rate(vllm:request_success_total{app=\"mistral-7b-judge\",job=\"vllm-models\"}[5m])",
               "legendFormat": "Judge avg tok/req"
             }
           ],
@@ -893,19 +893,19 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-awq\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-awq\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "AWQ (4-bit)"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-fp16\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "FP16 Baseline"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-lora\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-lora\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "LoRA"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-judge\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-judge\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "Judge"
             }
           ],
@@ -933,19 +933,19 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "vllm:avg_generation_throughput_toks_per_s{app=\"mistral-7b-awq\"}",
+              "expr": "vllm:avg_generation_throughput_toks_per_s{app=\"mistral-7b-awq\",job=\"vllm-models\"}",
               "legendFormat": "AWQ (4-bit)"
             },
             {
-              "expr": "vllm:avg_generation_throughput_toks_per_s{app=\"mistral-7b-fp16\"}",
+              "expr": "vllm:avg_generation_throughput_toks_per_s{app=\"mistral-7b-fp16\",job=\"vllm-models\"}",
               "legendFormat": "FP16 Baseline"
             },
             {
-              "expr": "vllm:avg_generation_throughput_toks_per_s{app=\"mistral-7b-lora\"}",
+              "expr": "vllm:avg_generation_throughput_toks_per_s{app=\"mistral-7b-lora\",job=\"vllm-models\"}",
               "legendFormat": "LoRA"
             },
             {
-              "expr": "vllm:avg_generation_throughput_toks_per_s{app=\"mistral-7b-judge\"}",
+              "expr": "vllm:avg_generation_throughput_toks_per_s{app=\"mistral-7b-judge\",job=\"vllm-models\"}",
               "legendFormat": "Judge"
             }
           ],
@@ -973,19 +973,19 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-awq\"} * 100",
+              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-awq\",job=\"vllm-models\"} * 100",
               "legendFormat": "AWQ (4-bit)"
             },
             {
-              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-fp16\"} * 100",
+              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-fp16\",job=\"vllm-models\"} * 100",
               "legendFormat": "FP16 Baseline"
             },
             {
-              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-lora\"} * 100",
+              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-lora\",job=\"vllm-models\"} * 100",
               "legendFormat": "LoRA"
             },
             {
-              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-judge\"} * 100",
+              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-judge\",job=\"vllm-models\"} * 100",
               "legendFormat": "Judge"
             }
           ],
@@ -1014,19 +1014,19 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "sum by (app)(rate(vllm:request_success_total{app=\"mistral-7b-awq\"}[5m]))",
+              "expr": "sum by (app)(rate(vllm:request_success_total{app=\"mistral-7b-awq\",job=\"vllm-models\"}[5m]))",
               "legendFormat": "AWQ (4-bit)"
             },
             {
-              "expr": "sum by (app)(rate(vllm:request_success_total{app=\"mistral-7b-fp16\"}[5m]))",
+              "expr": "sum by (app)(rate(vllm:request_success_total{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[5m]))",
               "legendFormat": "FP16 Baseline"
             },
             {
-              "expr": "sum by (app)(rate(vllm:request_success_total{app=\"mistral-7b-lora\"}[5m]))",
+              "expr": "sum by (app)(rate(vllm:request_success_total{app=\"mistral-7b-lora\",job=\"vllm-models\"}[5m]))",
               "legendFormat": "LoRA"
             },
             {
-              "expr": "sum by (app)(rate(vllm:request_success_total{app=\"mistral-7b-judge\"}[5m]))",
+              "expr": "sum by (app)(rate(vllm:request_success_total{app=\"mistral-7b-judge\",job=\"vllm-models\"}[5m]))",
               "legendFormat": "Judge"
             }
           ],
@@ -1054,19 +1054,19 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-awq\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-awq\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "AWQ (4-bit)"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-fp16\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "FP16 Baseline"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-lora\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-lora\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "LoRA"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-judge\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-judge\",job=\"vllm-models\"}[5m])))",
               "legendFormat": "Judge"
             }
           ],
@@ -1094,23 +1094,23 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "vllm:num_requests_running{app=\"mistral-7b-awq\"}",
+              "expr": "vllm:num_requests_running{app=\"mistral-7b-awq\",job=\"vllm-models\"}",
               "legendFormat": "AWQ running"
             },
             {
-              "expr": "vllm:num_requests_running{app=\"mistral-7b-fp16\"}",
+              "expr": "vllm:num_requests_running{app=\"mistral-7b-fp16\",job=\"vllm-models\"}",
               "legendFormat": "FP16 running"
             },
             {
-              "expr": "vllm:num_requests_running{app=\"mistral-7b-lora\"}",
+              "expr": "vllm:num_requests_running{app=\"mistral-7b-lora\",job=\"vllm-models\"}",
               "legendFormat": "LoRA running"
             },
             {
-              "expr": "vllm:num_requests_running{app=\"mistral-7b-judge\"}",
+              "expr": "vllm:num_requests_running{app=\"mistral-7b-judge\",job=\"vllm-models\"}",
               "legendFormat": "Judge running"
             },
             {
-              "expr": "vllm:num_requests_waiting{app=~\"mistral-7b-.*\"}",
+              "expr": "vllm:num_requests_waiting{app=~\"mistral-7b-.*\",job=\"vllm-models\"}",
               "legendFormat": "{{app}} waiting"
             }
           ],
