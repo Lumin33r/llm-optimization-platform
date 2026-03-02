@@ -97,7 +97,7 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "sum(rate(vllm:request_success_total{app=~\"mistral-7b-.*\",job=\"vllm-models\"}[5m]))",
+              "expr": "sum(rate(vllm:request_success_total{app=~\"mistral-7b-.*\",job=\"vllm-models\"}[15m]))",
               "legendFormat": ""
             }
           ],
@@ -129,7 +129,7 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "avg(histogram_quantile(0.95, sum by (le,app)(rate(vllm:e2e_request_latency_seconds_bucket{app=~\"mistral-7b-.*\",job=\"vllm-models\"}[5m]))))",
+              "expr": "avg(histogram_quantile(0.95, sum by (le,app)(rate(vllm:e2e_request_latency_seconds_bucket{app=~\"mistral-7b-.*\",job=\"vllm-models\"}[15m]))))",
               "legendFormat": ""
             }
           ],
@@ -296,11 +296,11 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-awq\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-awq\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "AWQ (4-bit)"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "FP16 Baseline"
             }
           ],
@@ -360,11 +360,11 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-awq\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-awq\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "AWQ (4-bit)"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "FP16 Baseline"
             }
           ],
@@ -425,11 +425,11 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_per_output_token_seconds_bucket{app=\"mistral-7b-awq\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_per_output_token_seconds_bucket{app=\"mistral-7b-awq\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "AWQ (4-bit)"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_per_output_token_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_per_output_token_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "FP16 Baseline"
             }
           ],
@@ -502,11 +502,11 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-lora\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-lora\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "LoRA"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "FP16 Baseline"
             }
           ],
@@ -566,11 +566,11 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-lora\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-lora\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "LoRA"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "FP16 Baseline"
             }
           ],
@@ -631,11 +631,11 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_per_output_token_seconds_bucket{app=\"mistral-7b-lora\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_per_output_token_seconds_bucket{app=\"mistral-7b-lora\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "LoRA"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_per_output_token_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_per_output_token_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "FP16 Baseline"
             }
           ],
@@ -708,7 +708,7 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-judge\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-judge\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "Judge P95"
             }
           ],
@@ -764,7 +764,7 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-judge\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-judge\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "Judge P95"
             }
           ],
@@ -852,7 +852,7 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "rate(vllm:generation_tokens_total{app=\"mistral-7b-judge\",job=\"vllm-models\"}[5m]) / rate(vllm:request_success_total{app=\"mistral-7b-judge\",job=\"vllm-models\"}[5m])",
+              "expr": "rate(vllm:generation_tokens_total{app=\"mistral-7b-judge\",job=\"vllm-models\"}[15m]) / rate(vllm:request_success_total{app=\"mistral-7b-judge\",job=\"vllm-models\"}[15m])",
               "legendFormat": "Judge avg tok/req"
             }
           ],
@@ -893,19 +893,19 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-awq\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-awq\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "AWQ (4-bit)"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "FP16 Baseline"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-lora\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-lora\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "LoRA"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-judge\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-judge\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "Judge"
             }
           ],
@@ -1014,19 +1014,19 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "sum by (app)(rate(vllm:request_success_total{app=\"mistral-7b-awq\",job=\"vllm-models\"}[5m]))",
+              "expr": "sum by (app)(rate(vllm:request_success_total{app=\"mistral-7b-awq\",job=\"vllm-models\"}[15m]))",
               "legendFormat": "AWQ (4-bit)"
             },
             {
-              "expr": "sum by (app)(rate(vllm:request_success_total{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[5m]))",
+              "expr": "sum by (app)(rate(vllm:request_success_total{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[15m]))",
               "legendFormat": "FP16 Baseline"
             },
             {
-              "expr": "sum by (app)(rate(vllm:request_success_total{app=\"mistral-7b-lora\",job=\"vllm-models\"}[5m]))",
+              "expr": "sum by (app)(rate(vllm:request_success_total{app=\"mistral-7b-lora\",job=\"vllm-models\"}[15m]))",
               "legendFormat": "LoRA"
             },
             {
-              "expr": "sum by (app)(rate(vllm:request_success_total{app=\"mistral-7b-judge\",job=\"vllm-models\"}[5m]))",
+              "expr": "sum by (app)(rate(vllm:request_success_total{app=\"mistral-7b-judge\",job=\"vllm-models\"}[15m]))",
               "legendFormat": "Judge"
             }
           ],
@@ -1054,19 +1054,19 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-awq\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-awq\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "AWQ (4-bit)"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "FP16 Baseline"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-lora\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-lora\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "LoRA"
             },
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-judge\",job=\"vllm-models\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-judge\",job=\"vllm-models\"}[15m])))",
               "legendFormat": "Judge"
             }
           ],
