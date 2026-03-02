@@ -716,13 +716,13 @@ The `github_oidc` Terraform module creates the OIDC provider and IAM role `llmpl
 
 ### 9.2 Workflow triggers
 
-| Workflow                 | Trigger                                       | What it does                              |
-| ------------------------ | --------------------------------------------- | ----------------------------------------- |
-| `ci-cd.yaml`             | Push to `main` (services/k8s paths)            | Lint → test → build → push → deploy       |
-| `deploy.yaml`            | Manual dispatch                               | Full build + deploy to EKS                |
-| `terraform.yaml`         | Push to `main` (infra paths) or manual        | fmt → plan → apply (or destroy)           |
-| `rollback.yaml`          | Manual dispatch                               | Emergency rollback to previous deployment |
-| `post-deploy-smoke.yaml` | After deploy                                  | Smoke tests against live endpoints        |
+| Workflow                 | Trigger                                | What it does                              |
+| ------------------------ | -------------------------------------- | ----------------------------------------- |
+| `ci-cd.yaml`             | Push to `main` (services/k8s paths)    | Lint → test → build → push → deploy       |
+| `deploy.yaml`            | Manual dispatch                        | Full build + deploy to EKS                |
+| `terraform.yaml`         | Push to `main` (infra paths) or manual | fmt → plan → apply (or destroy)           |
+| `rollback.yaml`          | Manual dispatch                        | Emergency rollback to previous deployment |
+| `post-deploy-smoke.yaml` | After deploy                           | Smoke tests against live endpoints        |
 
 ### 9.3 Environment
 

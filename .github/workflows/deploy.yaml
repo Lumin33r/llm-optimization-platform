@@ -263,3 +263,25 @@ jobs:
             echo "  Gateway:  LoadBalancer pending (check kubectl get svc -n platform)"
           fi
           echo "========================================================"
+
+          # ---- Job Summary (visible on the run's summary page) ----
+          echo "## Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | URL |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-----|" >> $GITHUB_STEP_SUMMARY
+          if [ -n "$GRAFANA_HOST" ]; then
+            echo "| **Grafana** | http://${GRAFANA_HOST}:3000 |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| **Grafana** | _LoadBalancer pending_ |" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -n "$GATEWAY_HOST" ]; then
+            echo "| **Gateway** | http://${GATEWAY_HOST}:8000 |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Health** | http://${GATEWAY_HOST}:8000/health |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Ops API** | http://${GATEWAY_HOST}:8000/ops/health |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| **Gateway** | _LoadBalancer pending_ |" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -n "$GRAFANA_HOST" ]; then
+            echo "> **Login:** admin / admin" >> $GITHUB_STEP_SUMMARY
+          fi
