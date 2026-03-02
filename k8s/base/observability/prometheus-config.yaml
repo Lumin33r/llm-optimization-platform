@@ -75,3 +75,20 @@ data:
           - source_labels: [__meta_kubernetes_pod_label_app]
             action: replace
             target_label: app
+
+      # --- kube-state-metrics ---
+      - job_name: 'kube-state-metrics'
+        static_configs:
+          - targets: ['kube-state-metrics.observability.svc:8080']
+
+      # --- node-exporter (per-node system metrics) ---
+      - job_name: 'node-exporter'
+        kubernetes_sd_configs:
+          - role: endpoints
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_label_app]
+            action: keep
+            regex: node-exporter
+          - source_labels: [__meta_kubernetes_endpoint_node_name]
+            action: replace
+            target_label: node

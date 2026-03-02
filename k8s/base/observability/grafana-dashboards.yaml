@@ -8,14 +8,22 @@ data:
   dashboards.yaml: |
     apiVersion: 1
     providers:
-      - name: 'default'
+      - name: 'llm'
         orgId: 1
-        folder: ''
+        folder: 'LLM Platform'
         type: file
         disableDeletion: false
         editable: true
         options:
-          path: /var/lib/grafana/dashboards
+          path: /var/lib/grafana/dashboards/llm
+      - name: 'kubernetes'
+        orgId: 1
+        folder: 'Kubernetes'
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/k8s
 ---
 apiVersion: v1
 kind: ConfigMap

@@ -90,6 +90,8 @@ spec:
           env:
             - name: GF_SERVER_HTTP_PORT
               value: "3001"
+            - name: GF_LIVE_MAX_CONNECTIONS
+              value: "0"
             - name: GF_SECURITY_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -105,7 +107,9 @@ spec:
             - name: dashboards-provider
               mountPath: /etc/grafana/provisioning/dashboards
             - name: dashboards
-              mountPath: /var/lib/grafana/dashboards
+              mountPath: /var/lib/grafana/dashboards/llm
+            - name: k8s-dashboards
+              mountPath: /var/lib/grafana/dashboards/k8s
           resources:
             requests:
               cpu: 200m
@@ -126,6 +130,9 @@ spec:
         - name: dashboards
           configMap:
             name: grafana-dashboards
+        - name: k8s-dashboards
+          configMap:
+            name: grafana-k8s-dashboards
 ---
 apiVersion: v1
 kind: Service
