@@ -79,7 +79,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ env.PROJECT }}-github-actions
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
@@ -97,6 +98,35 @@ jobs:
         run: |
           terraform plan -no-color -out=tfplan 2>&1 | tee plan_output.txt
           echo "plan_exitcode=$?" >> $GITHUB_OUTPUT
+
+      - name: Check for destructive changes
+        working-directory: infra/envs/${{ matrix.environment }}
+        run: |
+          DESTROY_COUNT=$(grep -c "will be destroyed" plan_output.txt || true)
+          if [ "$DESTROY_COUNT" -gt 0 ]; then
+            echo "::error::Plan contains $DESTROY_COUNT resource(s) marked for DESTRUCTION"
+            echo ""
+            echo "Resources to be destroyed:"
+            grep "will be destroyed" plan_output.txt
+            echo ""
+            echo "If this is intentional, use the 'destroy' action via workflow_dispatch."
+            exit 1
+          fi
+          echo "Safety check passed — no resources will be destroyed"
+
+      - name: Plan summary
+        working-directory: infra/envs/${{ matrix.environment }}
+        run: |
+          ADD=$(grep -c "will be created" plan_output.txt || true)
+          CHG=$(grep -c "will be updated" plan_output.txt || true)
+          RPL=$(grep -c "must be replaced" plan_output.txt || true)
+          echo "## Terraform Plan Summary — ${{ matrix.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "| Action | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Create | $ADD |" >> $GITHUB_STEP_SUMMARY
+          echo "| Update | $CHG |" >> $GITHUB_STEP_SUMMARY
+          echo "| Replace | $RPL |" >> $GITHUB_STEP_SUMMARY
+          echo "| Destroy | 0 (blocked by safety gate) |" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload Plan
         uses: actions/upload-artifact@v4
@@ -141,7 +171,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ env.PROJECT }}-github-actions
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
@@ -185,7 +216,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ env.PROJECT }}-github-actions
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
@@ -196,6 +228,17 @@ jobs:
       - name: Terraform Init
         working-directory: infra/envs/${{ inputs.environment }}
         run: terraform init
+
+      - name: Pre-destroy plan (show what will be removed)
+        working-directory: infra/envs/${{ inputs.environment }}
+        run: |
+          echo "::warning::The following resources will be DESTROYED:"
+          terraform plan -destroy -no-color 2>&1 | tee destroy_plan.txt
+          DESTROY_COUNT=$(grep -c "will be destroyed" destroy_plan.txt || true)
+          echo ""
+          echo "Total resources to destroy: $DESTROY_COUNT"
+          echo "## Destroy Plan — ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**$DESTROY_COUNT resource(s)** will be permanently deleted." >> $GITHUB_STEP_SUMMARY
 
       - name: Terraform Destroy
         working-directory: infra/envs/${{ inputs.environment }}

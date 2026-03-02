@@ -67,6 +67,15 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Verify ECR repository exists
+        run: |
+          if ! aws ecr describe-repositories --repository-names ${{ matrix.ecr_repo }} --region us-west-2 > /dev/null 2>&1; then
+            echo "::error::ECR repository '${{ matrix.ecr_repo }}' does not exist."
+            echo "Run Terraform first to create infrastructure."
+            exit 1
+          fi
+          echo "✓ ECR repository '${{ matrix.ecr_repo }}' verified"
+
       - name: Build and push ${{ matrix.service }}
         run: |
           ECR=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-2.amazonaws.com
@@ -108,6 +117,15 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Verify ECR repository exists
+        run: |
+          if ! aws ecr describe-repositories --repository-names llmplatform-dev/grafana-plugin --region us-west-2 > /dev/null 2>&1; then
+            echo "::error::ECR repository 'llmplatform-dev/grafana-plugin' does not exist."
+            echo "Run Terraform first to create infrastructure."
+            exit 1
+          fi
+          echo "✓ ECR repository 'llmplatform-dev/grafana-plugin' verified"
+
       - name: Build and push Grafana image
         run: |
           ECR=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-2.amazonaws.com
@@ -139,6 +157,41 @@ jobs:
       - name: Update kubeconfig
         run: |
           aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region us-west-2
+
+      - name: Pre-flight — verify cluster connectivity
+        run: |
+          echo "Checking EKS cluster connectivity..."
+          if ! kubectl cluster-info > /dev/null 2>&1; then
+            echo "::error::Cannot connect to EKS cluster '${{ env.EKS_CLUSTER }}'."
+            echo "Ensure the cluster exists (run Terraform first) and credentials are valid."
+            exit 1
+          fi
+          echo "✓ Cluster connection verified"
+          echo ""
+          echo "Node status:"
+          kubectl get nodes
+          echo ""
+          echo "Existing namespaces:"
+          kubectl get ns --no-headers | awk '{print $1}'
+
+      - name: Pre-flight — verify ECR images exist
+        run: |
+          echo "Verifying all required images exist in ECR..."
+          MISSING=0
+          for repo in gateway quant-api finetune-api eval-api data-engine grafana-plugin; do
+            if ! aws ecr describe-images --repository-name llmplatform-dev/$repo --image-ids imageTag=${{ env.IMAGE_TAG }} --region us-west-2 > /dev/null 2>&1; then
+              echo "::warning::Image llmplatform-dev/$repo:${{ env.IMAGE_TAG }} not found in ECR"
+              MISSING=$((MISSING + 1))
+            else
+              echo "  ✓ llmplatform-dev/$repo:${{ env.IMAGE_TAG }}"
+            fi
+          done
+          if [ "$MISSING" -gt 0 ]; then
+            echo ""
+            echo "::error::$MISSING image(s) missing from ECR. Run CI/CD Pipeline first to build and push images."
+            exit 1
+          fi
+          echo "✓ All ECR images verified"
 
       - name: Deploy base platform (namespaces + services)
         run: |
@@ -172,11 +225,20 @@ jobs:
           kubectl rollout status deployment/prometheus -n observability --timeout=300s
 
           echo "=== Waiting for LLM models (may take several minutes for model download) ==="
-          # Wait for each of the 4 model variants
+          # Wait for each of the 4 model variants — fail if ANY model doesn't come up
+          FAILED_MODELS=""
           for model in mistral-7b-awq mistral-7b-fp16 mistral-7b-lora mistral-7b-judge; do
             echo "  Waiting for $model..."
-            kubectl rollout status deployment/$model -n llm-baseline --timeout=600s || echo "WARNING: $model not ready"
+            if ! kubectl rollout status deployment/$model -n llm-baseline --timeout=600s; then
+              echo "::error::Model $model failed to roll out"
+              FAILED_MODELS="$FAILED_MODELS $model"
+            fi
           done
+          if [ -n "$FAILED_MODELS" ]; then
+            echo "::error::The following models failed to deploy:$FAILED_MODELS"
+            echo "Check pod logs: kubectl logs -n llm-baseline -l app=<model> --tail=50"
+            exit 1
+          fi
 
       - name: Patch dashboard with public gateway URL
         run: |
@@ -222,22 +284,41 @@ jobs:
           sleep 5
 
           echo "=== Gateway Health ==="
-          curl -sf http://localhost:8080/health || echo "WARNING: Gateway health check failed"
+          if ! curl -sf http://localhost:8080/health; then
+            echo "::error::Gateway health check failed — deployment may be broken"
+            exit 1
+          fi
+          echo " ✓ Gateway healthy"
 
           echo ""
           echo "=== Ops Health ==="
-          curl -sf http://localhost:8080/ops/health || echo "WARNING: Ops health check failed"
+          if ! curl -sf http://localhost:8080/ops/health; then
+            echo "::warning::Ops health check failed — non-critical, continuing"
+          else
+            echo " ✓ Ops API healthy"
+          fi
 
           echo ""
           echo "=== Model Status ==="
+          MODEL_FAILURES=0
           for model in mistral-7b-awq mistral-7b-fp16 mistral-7b-lora mistral-7b-judge; do
             echo -n "  $model: "
-            kubectl exec -n llm-baseline deployment/$model -- curl -sf http://localhost:8000/v1/models 2>/dev/null | head -c 100 || echo "not ready"
+            if kubectl exec -n llm-baseline deployment/$model -- curl -sf http://localhost:8000/v1/models 2>/dev/null | head -c 100; then
+              echo " ✓"
+            else
+              echo " ✗ not responding"
+              MODEL_FAILURES=$((MODEL_FAILURES + 1))
+            fi
           done
 
+          if [ "$MODEL_FAILURES" -gt 0 ]; then
+            echo "::error::$MODEL_FAILURES model(s) failed smoke test"
+            exit 1
+          fi
+
           echo ""
-          echo "=== Deployment Complete ==="
-          echo "All services deployed successfully to ${{ env.EKS_CLUSTER }}"
+          echo "=== All Smoke Tests Passed ==="
+          echo "All services deployed and verified on ${{ env.EKS_CLUSTER }}"
 
       - name: Print public access URLs
         run: |

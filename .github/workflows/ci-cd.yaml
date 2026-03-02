@@ -99,6 +99,15 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Verify ECR repository exists
+        run: |
+          if ! aws ecr describe-repositories --repository-names ${{ matrix.ecr_repo }} --region ${{ env.AWS_REGION }} > /dev/null 2>&1; then
+            echo "::error::ECR repository '${{ matrix.ecr_repo }}' does not exist."
+            echo "Run Terraform first to create infrastructure: Actions → Terraform Infrastructure → apply"
+            exit 1
+          fi
+          echo "✓ ECR repository '${{ matrix.ecr_repo }}' verified"
+
       - name: Build and push ${{ matrix.service }}
         run: |
           docker build \
@@ -140,6 +149,15 @@ jobs:
 
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Verify ECR repository exists
+        run: |
+          if ! aws ecr describe-repositories --repository-names llmplatform-dev/grafana-plugin --region ${{ env.AWS_REGION }} > /dev/null 2>&1; then
+            echo "::error::ECR repository 'llmplatform-dev/grafana-plugin' does not exist."
+            echo "Run Terraform first to create infrastructure: Actions → Terraform Infrastructure → apply"
+            exit 1
+          fi
+          echo "✓ ECR repository 'llmplatform-dev/grafana-plugin' verified"
 
       - name: Build and push Grafana image
         run: |
