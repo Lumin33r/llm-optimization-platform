@@ -56,14 +56,14 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "count(up{app=~\"mistral-7b-.*\",job=\"vllm-models\"} == 1)",
-              "legendFormat": ""
+              "expr": "count(up{job=\"vllm-models\"} == 1)",
+              "legendFormat": "Models"
             }
           ],
           "fieldConfig": {
             "defaults": {
+              "unit": "short",
               "thresholds": {
-                "mode": "absolute",
                 "steps": [
                   {
                     "color": "red",
@@ -78,16 +78,23 @@ data:
                     "value": 4
                   }
                 ]
-              },
-              "mappings": []
+              }
             }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background"
           }
         },
         {
           "id": 2,
           "type": "stat",
           "title": "Total RPS",
-          "description": "Platform-wide requests per second across all models.",
+          "description": "Combined request rate across all 4 vLLM models.",
           "gridPos": {
             "h": 4,
             "w": 4,
@@ -97,8 +104,8 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "sum(rate(vllm:request_success_total{app=~\"mistral-7b-.*\",job=\"vllm-models\"}[15m]))",
-              "legendFormat": ""
+              "expr": "sum(rate(vllm:request_success_total{job=\"vllm-models\"}[15m]))",
+              "legendFormat": "req/s"
             }
           ],
           "fieldConfig": {
@@ -113,13 +120,21 @@ data:
                 ]
               }
             }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background"
           }
         },
         {
           "id": 3,
-          "type": "stat",
-          "title": "P95 Latency (avg)",
-          "description": "Average P95 end-to-end latency across all 4 models.",
+          "type": "gauge",
+          "title": "P95 Latency (Worst)",
+          "description": "Worst P95 end-to-end latency across all models. Under 2s = green.",
           "gridPos": {
             "h": 4,
             "w": 4,
@@ -129,15 +144,16 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "avg(histogram_quantile(0.95, sum by (le,app)(rate(vllm:e2e_request_latency_seconds_bucket{app=~\"mistral-7b-.*\",job=\"vllm-models\"}[15m]))))",
-              "legendFormat": ""
+              "expr": "max(histogram_quantile(0.95, sum by (le, app)(rate(vllm:e2e_request_latency_seconds_bucket{job=\"vllm-models\"}[15m]))))",
+              "legendFormat": "Worst P95"
             }
           ],
           "fieldConfig": {
             "defaults": {
               "unit": "s",
+              "min": 0,
+              "max": 10,
               "thresholds": {
-                "mode": "absolute",
                 "steps": [
                   {
                     "color": "green",
@@ -154,13 +170,20 @@ data:
                 ]
               }
             }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
           }
         },
         {
           "id": 4,
-          "type": "stat",
-          "title": "Waiting Queue",
-          "description": "Total requests waiting across all models. 0 = healthy, >0 = backpressure.",
+          "type": "gauge",
+          "title": "Queue Depth",
+          "description": "Total requests waiting across all models. 0 = ideal. Rising = models overloaded.",
           "gridPos": {
             "h": 4,
             "w": 4,
@@ -170,14 +193,16 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "sum(vllm:num_requests_waiting{app=~\"mistral-7b-.*\",job=\"vllm-models\"})",
-              "legendFormat": ""
+              "expr": "sum(vllm:num_requests_waiting{job=\"vllm-models\"})",
+              "legendFormat": "Waiting"
             }
           ],
           "fieldConfig": {
             "defaults": {
+              "unit": "short",
+              "min": 0,
+              "max": 30,
               "thresholds": {
-                "mode": "absolute",
                 "steps": [
                   {
                     "color": "green",
@@ -185,22 +210,29 @@ data:
                   },
                   {
                     "color": "yellow",
-                    "value": 1
+                    "value": 5
                   },
                   {
                     "color": "red",
-                    "value": 10
+                    "value": 15
                   }
                 ]
               }
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 5,
           "type": "stat",
-          "title": "Avg Throughput",
-          "description": "Average generation throughput across all models (tokens/sec).",
+          "title": "Total Throughput",
+          "description": "Combined generation throughput across all models (tokens/sec).",
           "gridPos": {
             "h": 4,
             "w": 4,
@@ -210,8 +242,8 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "avg(vllm:avg_generation_throughput_toks_per_s{app=~\"mistral-7b-.*\",job=\"vllm-models\"})",
-              "legendFormat": ""
+              "expr": "sum(vllm:avg_generation_throughput_toks_per_s{job=\"vllm-models\"})",
+              "legendFormat": "tok/s"
             }
           ],
           "fieldConfig": {
@@ -220,19 +252,35 @@ data:
               "thresholds": {
                 "steps": [
                   {
-                    "color": "green",
+                    "color": "red",
                     "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 10
+                  },
+                  {
+                    "color": "green",
+                    "value": 30
                   }
                 ]
               }
             }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background"
           }
         },
         {
           "id": 6,
-          "type": "stat",
+          "type": "gauge",
           "title": "GPU Cache Avg",
-          "description": "Average GPU KV-cache usage across all models. >90% = memory pressure.",
+          "description": "Average GPU KV-cache usage across all models. Under 60% = green.",
           "gridPos": {
             "h": 4,
             "w": 4,
@@ -242,15 +290,16 @@ data:
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "avg(vllm:gpu_cache_usage_perc{app=~\"mistral-7b-.*\",job=\"vllm-models\"}) * 100",
-              "legendFormat": ""
+              "expr": "avg(vllm:gpu_cache_usage_perc{job=\"vllm-models\"}) * 100",
+              "legendFormat": "Cache %"
             }
           ],
           "fieldConfig": {
             "defaults": {
               "unit": "percent",
+              "min": 0,
+              "max": 100,
               "thresholds": {
-                "mode": "absolute",
                 "steps": [
                   {
                     "color": "green",
@@ -258,21 +307,28 @@ data:
                   },
                   {
                     "color": "yellow",
-                    "value": 70
+                    "value": 60
                   },
                   {
                     "color": "red",
-                    "value": 90
+                    "value": 85
                   }
                 ]
               }
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 10,
           "type": "row",
-          "title": "🔬 Quantization — AWQ vs FP16 Baseline",
+          "title": "\u26a1 Quant Team \u2014 AWQ vs FP16",
           "gridPos": {
             "h": 1,
             "w": 24,
@@ -284,11 +340,11 @@ data:
         },
         {
           "id": 11,
-          "type": "timeseries",
-          "title": "P95 E2E Latency — AWQ vs Baseline",
-          "description": "End-to-end request latency (P95). AWQ (4-bit) should be LOWER than FP16 baseline — faster inference from smaller weights.",
+          "type": "bargauge",
+          "title": "P95 Latency \u2014 AWQ vs FP16",
+          "description": "End-to-end P95 latency comparison. AWQ should be significantly lower than FP16 baseline.",
           "gridPos": {
-            "h": 8,
+            "h": 7,
             "w": 8,
             "x": 0,
             "y": 5
@@ -307,20 +363,41 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "s",
-              "custom": {
-                "fillOpacity": 10,
-                "lineWidth": 2
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 2
+                  },
+                  {
+                    "color": "red",
+                    "value": 5
+                  }
+                ]
               }
+            }
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 12,
-          "type": "timeseries",
-          "title": "Generation Throughput — AWQ vs Baseline",
-          "description": "Tokens generated per second. AWQ should be HIGHER than FP16 — 4-bit weights need less compute per token.",
+          "type": "bargauge",
+          "title": "Throughput \u2014 AWQ vs FP16",
+          "description": "Generation throughput (tokens/sec). AWQ should generate tokens faster due to smaller model.",
           "gridPos": {
-            "h": 8,
+            "h": 7,
             "w": 8,
             "x": 8,
             "y": 5
@@ -339,20 +416,41 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "short",
-              "custom": {
-                "fillOpacity": 10,
-                "lineWidth": 2
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 10
+                  },
+                  {
+                    "color": "green",
+                    "value": 30
+                  }
+                ]
               }
+            }
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 13,
-          "type": "timeseries",
-          "title": "Time to First Token — AWQ vs Baseline",
-          "description": "P95 prefill time. Affects perceived responsiveness. AWQ should be LOWER (smaller model = faster prefill).",
+          "type": "bargauge",
+          "title": "TTFT \u2014 AWQ vs FP16",
+          "description": "Time to first token. AWQ should prefill faster. Lower is better.",
           "gridPos": {
-            "h": 8,
+            "h": 7,
             "w": 8,
             "x": 16,
             "y": 5
@@ -371,133 +469,252 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "s",
-              "custom": {
-                "fillOpacity": 10,
-                "lineWidth": 2
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 3
+                  }
+                ]
               }
+            }
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 14,
-          "type": "timeseries",
-          "title": "GPU KV-Cache — AWQ vs Baseline",
-          "description": "GPU memory for KV-cache. AWQ (4-bit) should use ~25% of FP16 cache — the key efficiency win.",
+          "type": "gauge",
+          "title": "GPU Cache \u2014 AWQ",
+          "description": "AWQ model KV-cache usage. Should be lower than FP16 due to 4-bit quantization.",
           "gridPos": {
-            "h": 8,
-            "w": 8,
+            "h": 7,
+            "w": 6,
             "x": 0,
-            "y": 13
+            "y": 12
           },
           "datasource": "Prometheus",
           "targets": [
             {
               "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-awq\",job=\"vllm-models\"} * 100",
-              "legendFormat": "AWQ (4-bit)"
-            },
-            {
-              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-fp16\",job=\"vllm-models\"} * 100",
-              "legendFormat": "FP16 Baseline"
+              "legendFormat": "AWQ Cache"
             }
           ],
           "fieldConfig": {
             "defaults": {
               "unit": "percent",
+              "min": 0,
               "max": 100,
-              "custom": {
-                "fillOpacity": 15,
-                "lineWidth": 2
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 60
+                  },
+                  {
+                    "color": "red",
+                    "value": 85
+                  }
+                ]
               }
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 15,
-          "type": "timeseries",
-          "title": "Decode Time per Token — AWQ vs Baseline",
-          "description": "P95 time to produce each output token. AWQ should be LOWER — faster per-token generation.",
+          "type": "gauge",
+          "title": "GPU Cache \u2014 FP16",
+          "description": "FP16 baseline KV-cache usage. Higher memory footprint expected.",
           "gridPos": {
-            "h": 8,
-            "w": 8,
-            "x": 8,
-            "y": 13
+            "h": 7,
+            "w": 6,
+            "x": 6,
+            "y": 12
           },
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_per_output_token_seconds_bucket{app=\"mistral-7b-awq\",job=\"vllm-models\"}[15m])))",
-              "legendFormat": "AWQ (4-bit)"
-            },
-            {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_per_output_token_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[15m])))",
-              "legendFormat": "FP16 Baseline"
+              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-fp16\",job=\"vllm-models\"} * 100",
+              "legendFormat": "FP16 Cache"
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "s",
-              "custom": {
-                "fillOpacity": 10,
-                "lineWidth": 2
+              "unit": "percent",
+              "min": 0,
+              "max": 100,
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 60
+                  },
+                  {
+                    "color": "red",
+                    "value": 85
+                  }
+                ]
               }
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 16,
-          "type": "timeseries",
-          "title": "Tokens Generated — AWQ vs Baseline",
-          "description": "Cumulative generation tokens. Shows volume processed — useful for throughput regression detection.",
+          "type": "stat",
+          "title": "Quant Pass Rate",
+          "description": "Benchmark validation pass rate for the Quant team. Proves AWQ maintains quality despite compression.",
           "gridPos": {
-            "h": 8,
-            "w": 8,
-            "x": 16,
-            "y": 13
+            "h": 7,
+            "w": 6,
+            "x": 12,
+            "y": 12
           },
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "vllm:generation_tokens_total{app=\"mistral-7b-awq\",job=\"vllm-models\"}",
-              "legendFormat": "AWQ (4-bit)"
-            },
-            {
-              "expr": "vllm:generation_tokens_total{app=\"mistral-7b-fp16\",job=\"vllm-models\"}",
-              "legendFormat": "FP16 Baseline"
+              "expr": "sum(increase(lab_harness_pass_total{team=\"quant\"}[1h])) / sum(increase(lab_harness_requests_total{team=\"quant\"}[1h])) * 100",
+              "legendFormat": "Pass %"
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "short",
-              "custom": {
-                "fillOpacity": 10,
-                "lineWidth": 2
+              "unit": "percent",
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 50
+                  },
+                  {
+                    "color": "green",
+                    "value": 80
+                  }
+                ]
               }
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background"
+          }
+        },
+        {
+          "id": 17,
+          "type": "bargauge",
+          "title": "Quant Harness Latency",
+          "description": "Average end-to-end harness latency including gateway routing, by team.",
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 18,
+            "y": 12
+          },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum(rate(lab_harness_latency_ms_sum{team=\"quant\"}[15m])) / sum(rate(lab_harness_latency_ms_count{team=\"quant\"}[15m]))",
+              "legendFormat": "Quant Latency"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ms",
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 500
+                  },
+                  {
+                    "color": "red",
+                    "value": 2000
+                  }
+                ]
+              }
+            }
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 20,
           "type": "row",
-          "title": "🧠 Fine-Tuning — LoRA vs FP16 Baseline",
+          "title": "\ud83e\uddec Finetune Team \u2014 LoRA vs FP16",
           "gridPos": {
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 21
+            "y": 19
           },
           "collapsed": false,
           "panels": []
         },
         {
           "id": 21,
-          "type": "timeseries",
-          "title": "P95 E2E Latency — LoRA vs Baseline",
-          "description": "LoRA adapter should add minimal latency overhead. Lines should nearly OVERLAP with FP16.",
+          "type": "bargauge",
+          "title": "P95 Latency \u2014 LoRA vs FP16",
+          "description": "End-to-end P95 latency. LoRA should be close to FP16 (adapter adds minimal overhead).",
           "gridPos": {
-            "h": 8,
+            "h": 7,
             "w": 8,
             "x": 0,
-            "y": 22
+            "y": 20
           },
           "datasource": "Prometheus",
           "targets": [
@@ -513,23 +730,44 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "s",
-              "custom": {
-                "fillOpacity": 10,
-                "lineWidth": 2
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 2
+                  },
+                  {
+                    "color": "red",
+                    "value": 5
+                  }
+                ]
               }
+            }
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 22,
-          "type": "timeseries",
-          "title": "Generation Throughput — LoRA vs Baseline",
-          "description": "LoRA throughput should be within 10% of FP16. Larger gap suggests adapter overhead.",
+          "type": "bargauge",
+          "title": "Throughput \u2014 LoRA vs FP16",
+          "description": "Generation throughput. LoRA should match or slightly trail FP16.",
           "gridPos": {
-            "h": 8,
+            "h": 7,
             "w": 8,
             "x": 8,
-            "y": 22
+            "y": 20
           },
           "datasource": "Prometheus",
           "targets": [
@@ -545,23 +783,44 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "short",
-              "custom": {
-                "fillOpacity": 10,
-                "lineWidth": 2
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 10
+                  },
+                  {
+                    "color": "green",
+                    "value": 30
+                  }
+                ]
               }
+            }
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 23,
-          "type": "timeseries",
-          "title": "Time to First Token — LoRA vs Baseline",
-          "description": "LoRA may have slightly higher TTFT from adapter merge. Should be <10% overhead.",
+          "type": "bargauge",
+          "title": "TTFT \u2014 LoRA vs FP16",
+          "description": "Time to first token. LoRA adapter should add minimal prefill overhead.",
           "gridPos": {
-            "h": 8,
+            "h": 7,
             "w": 8,
             "x": 16,
-            "y": 22
+            "y": 20
           },
           "datasource": "Prometheus",
           "targets": [
@@ -577,246 +836,448 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "s",
-              "custom": {
-                "fillOpacity": 10,
-                "lineWidth": 2
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 3
+                  }
+                ]
               }
+            }
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 24,
-          "type": "timeseries",
-          "title": "GPU KV-Cache — LoRA vs Baseline",
-          "description": "LoRA uses same base weights + small adapter. Cache usage should be SIMILAR to FP16.",
+          "type": "gauge",
+          "title": "GPU Cache \u2014 LoRA",
+          "description": "LoRA model KV-cache usage. Should be similar to FP16 (adapter barely affects memory).",
           "gridPos": {
-            "h": 8,
-            "w": 8,
+            "h": 7,
+            "w": 6,
             "x": 0,
-            "y": 30
+            "y": 27
           },
           "datasource": "Prometheus",
           "targets": [
             {
               "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-lora\",job=\"vllm-models\"} * 100",
-              "legendFormat": "LoRA"
-            },
-            {
-              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-fp16\",job=\"vllm-models\"} * 100",
-              "legendFormat": "FP16 Baseline"
+              "legendFormat": "LoRA Cache"
             }
           ],
           "fieldConfig": {
             "defaults": {
               "unit": "percent",
+              "min": 0,
               "max": 100,
-              "custom": {
-                "fillOpacity": 15,
-                "lineWidth": 2
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 60
+                  },
+                  {
+                    "color": "red",
+                    "value": 85
+                  }
+                ]
               }
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 25,
-          "type": "timeseries",
-          "title": "Decode Time per Token — LoRA vs Baseline",
-          "description": "Per-token decode time. Should be nearly identical — LoRA doesn't change decode mechanics.",
+          "type": "gauge",
+          "title": "GPU Cache \u2014 FP16",
+          "description": "FP16 baseline KV-cache usage for comparison with LoRA.",
           "gridPos": {
-            "h": 8,
-            "w": 8,
-            "x": 8,
-            "y": 30
+            "h": 7,
+            "w": 6,
+            "x": 6,
+            "y": 27
           },
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_per_output_token_seconds_bucket{app=\"mistral-7b-lora\",job=\"vllm-models\"}[15m])))",
-              "legendFormat": "LoRA"
-            },
-            {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_per_output_token_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[15m])))",
-              "legendFormat": "FP16 Baseline"
+              "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-fp16\",job=\"vllm-models\"} * 100",
+              "legendFormat": "FP16 Cache"
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "s",
-              "custom": {
-                "fillOpacity": 10,
-                "lineWidth": 2
+              "unit": "percent",
+              "min": 0,
+              "max": 100,
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 60
+                  },
+                  {
+                    "color": "red",
+                    "value": 85
+                  }
+                ]
               }
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 26,
-          "type": "timeseries",
-          "title": "Tokens Generated — LoRA vs Baseline",
-          "description": "Cumulative token volume. Useful for A/B volume consistency checks.",
+          "type": "stat",
+          "title": "Finetune Pass Rate",
+          "description": "Benchmark validation pass rate for the Finetune team. Shows if LoRA specialization improves quality.",
           "gridPos": {
-            "h": 8,
-            "w": 8,
-            "x": 16,
-            "y": 30
+            "h": 7,
+            "w": 6,
+            "x": 12,
+            "y": 27
           },
           "datasource": "Prometheus",
           "targets": [
             {
-              "expr": "vllm:generation_tokens_total{app=\"mistral-7b-lora\",job=\"vllm-models\"}",
-              "legendFormat": "LoRA"
-            },
-            {
-              "expr": "vllm:generation_tokens_total{app=\"mistral-7b-fp16\",job=\"vllm-models\"}",
-              "legendFormat": "FP16 Baseline"
+              "expr": "sum(increase(lab_harness_pass_total{team=\"finetune\"}[1h])) / sum(increase(lab_harness_requests_total{team=\"finetune\"}[1h])) * 100",
+              "legendFormat": "Pass %"
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "short",
-              "custom": {
-                "fillOpacity": 10,
-                "lineWidth": 2
+              "unit": "percent",
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 50
+                  },
+                  {
+                    "color": "green",
+                    "value": 80
+                  }
+                ]
               }
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background"
+          }
+        },
+        {
+          "id": 27,
+          "type": "bargauge",
+          "title": "Finetune Harness Latency",
+          "description": "Average end-to-end harness latency for finetune team benchmarks.",
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 18,
+            "y": 27
+          },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum(rate(lab_harness_latency_ms_sum{team=\"finetune\"}[15m])) / sum(rate(lab_harness_latency_ms_count{team=\"finetune\"}[15m]))",
+              "legendFormat": "Finetune Latency"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ms",
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 500
+                  },
+                  {
+                    "color": "red",
+                    "value": 2000
+                  }
+                ]
+              }
+            }
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 30,
           "type": "row",
-          "title": "⚖️ Evaluation — Judge Model Performance",
+          "title": "\ud83d\udd2c Eval Team \u2014 Judge Model",
           "gridPos": {
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 38
+            "y": 34
           },
           "collapsed": false,
           "panels": []
         },
         {
           "id": 31,
-          "type": "timeseries",
-          "title": "P95 E2E Latency — Judge",
-          "description": "Judge scoring latency. Should stay under 3s for interactive scoring.",
+          "type": "gauge",
+          "title": "Judge P95 Latency",
+          "description": "Judge model P95 end-to-end latency. Used for scoring eval benchmarks.",
           "gridPos": {
-            "h": 8,
-            "w": 8,
+            "h": 7,
+            "w": 6,
             "x": 0,
-            "y": 39
+            "y": 35
           },
           "datasource": "Prometheus",
           "targets": [
             {
               "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:e2e_request_latency_seconds_bucket{app=\"mistral-7b-judge\",job=\"vllm-models\"}[15m])))",
-              "legendFormat": "Judge P95"
+              "legendFormat": "P95"
             }
           ],
           "fieldConfig": {
             "defaults": {
               "unit": "s",
-              "custom": {
-                "fillOpacity": 10,
-                "lineWidth": 2
+              "min": 0,
+              "max": 10,
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 2
+                  },
+                  {
+                    "color": "red",
+                    "value": 5
+                  }
+                ]
               }
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 32,
-          "type": "timeseries",
-          "title": "Generation Throughput — Judge",
-          "description": "Judge tokens/sec. Higher = faster scoring pipeline. Should be stable under load.",
+          "type": "gauge",
+          "title": "Judge Throughput",
+          "description": "Judge model generation throughput (tok/s).",
           "gridPos": {
-            "h": 8,
-            "w": 8,
-            "x": 8,
-            "y": 39
+            "h": 7,
+            "w": 6,
+            "x": 6,
+            "y": 35
           },
           "datasource": "Prometheus",
           "targets": [
             {
               "expr": "vllm:avg_generation_throughput_toks_per_s{app=\"mistral-7b-judge\",job=\"vllm-models\"}",
-              "legendFormat": "Judge tok/s"
+              "legendFormat": "tok/s"
             }
           ],
           "fieldConfig": {
             "defaults": {
               "unit": "short",
-              "custom": {
-                "fillOpacity": 10,
-                "lineWidth": 2
+              "min": 0,
+              "max": 100,
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 10
+                  },
+                  {
+                    "color": "green",
+                    "value": 25
+                  }
+                ]
               }
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 33,
-          "type": "timeseries",
-          "title": "Time to First Token — Judge",
-          "description": "Prefill time for scoring requests. Affected by prompt-response pair length.",
+          "type": "gauge",
+          "title": "Judge TTFT",
+          "description": "Judge model time to first token. Critical for real-time scoring.",
           "gridPos": {
-            "h": 8,
-            "w": 8,
-            "x": 16,
-            "y": 39
+            "h": 7,
+            "w": 6,
+            "x": 12,
+            "y": 35
           },
           "datasource": "Prometheus",
           "targets": [
             {
               "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-judge\",job=\"vllm-models\"}[15m])))",
-              "legendFormat": "Judge P95"
+              "legendFormat": "TTFT"
             }
           ],
           "fieldConfig": {
             "defaults": {
               "unit": "s",
-              "custom": {
-                "fillOpacity": 10,
-                "lineWidth": 2
+              "min": 0,
+              "max": 5,
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 3
+                  }
+                ]
               }
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 34,
-          "type": "timeseries",
-          "title": "GPU KV-Cache — Judge",
-          "description": "Judge GPU memory usage. If near 100%, scoring requests will queue.",
+          "type": "gauge",
+          "title": "Judge GPU Cache",
+          "description": "Judge model GPU KV-cache usage. Higher usage during evaluation runs.",
           "gridPos": {
-            "h": 8,
-            "w": 8,
-            "x": 0,
-            "y": 47
+            "h": 7,
+            "w": 6,
+            "x": 18,
+            "y": 35
           },
           "datasource": "Prometheus",
           "targets": [
             {
               "expr": "vllm:gpu_cache_usage_perc{app=\"mistral-7b-judge\",job=\"vllm-models\"} * 100",
-              "legendFormat": "Judge Cache %"
+              "legendFormat": "Cache"
             }
           ],
           "fieldConfig": {
             "defaults": {
               "unit": "percent",
+              "min": 0,
               "max": 100,
-              "custom": {
-                "fillOpacity": 15,
-                "lineWidth": 2
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 60
+                  },
+                  {
+                    "color": "red",
+                    "value": 85
+                  }
+                ]
               }
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 35,
           "type": "timeseries",
-          "title": "Queue Depth — Judge",
-          "description": "Active and queued requests. Rising 'waiting' line = judge can't keep up with scoring demand.",
+          "title": "Judge Queue Depth",
+          "description": "Requests running vs waiting for judge model. Rising 'waiting' = judge can't keep up with scoring.",
           "gridPos": {
-            "h": 8,
+            "h": 7,
             "w": 8,
-            "x": 8,
-            "y": 47
+            "x": 0,
+            "y": 42
           },
           "datasource": "Prometheus",
           "targets": [
@@ -831,8 +1292,9 @@ data:
           ],
           "fieldConfig": {
             "defaults": {
+              "unit": "short",
               "custom": {
-                "fillOpacity": 10,
+                "fillOpacity": 15,
                 "lineWidth": 2
               }
             }
@@ -840,55 +1302,124 @@ data:
         },
         {
           "id": 36,
-          "type": "timeseries",
-          "title": "Avg Tokens per Request — Judge",
-          "description": "Scoring responses should be short (~50-100 tokens). High values suggest over-generation.",
+          "type": "stat",
+          "title": "Eval Pass Rate",
+          "description": "Benchmark validation pass rate for the Eval team.",
           "gridPos": {
-            "h": 8,
+            "h": 7,
+            "w": 8,
+            "x": 8,
+            "y": 42
+          },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum(increase(lab_harness_pass_total{team=\"eval\"}[1h])) / sum(increase(lab_harness_requests_total{team=\"eval\"}[1h])) * 100",
+              "legendFormat": "Pass %"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 50
+                  },
+                  {
+                    "color": "green",
+                    "value": 80
+                  }
+                ]
+              }
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background"
+          }
+        },
+        {
+          "id": 37,
+          "type": "bargauge",
+          "title": "Judge Tokens/Request",
+          "description": "Average tokens generated per judge request. Scoring responses should be short (50-100 tokens).",
+          "gridPos": {
+            "h": 7,
             "w": 8,
             "x": 16,
-            "y": 47
+            "y": 42
           },
           "datasource": "Prometheus",
           "targets": [
             {
               "expr": "rate(vllm:generation_tokens_total{app=\"mistral-7b-judge\",job=\"vllm-models\"}[15m]) / rate(vllm:request_success_total{app=\"mistral-7b-judge\",job=\"vllm-models\"}[15m])",
-              "legendFormat": "Judge avg tok/req"
+              "legendFormat": "Avg tok/req"
             }
           ],
           "fieldConfig": {
             "defaults": {
               "unit": "short",
-              "custom": {
-                "fillOpacity": 10,
-                "lineWidth": 2
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 100
+                  },
+                  {
+                    "color": "red",
+                    "value": 200
+                  }
+                ]
               }
+            }
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 40,
           "type": "row",
-          "title": "🏆 Head-to-Head — All Models",
+          "title": "\ud83c\udfc6 Head-to-Head \u2014 All Models",
           "gridPos": {
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 55
+            "y": 49
           },
           "collapsed": false,
           "panels": []
         },
         {
           "id": 41,
-          "type": "timeseries",
-          "title": "P95 Latency — All Models",
-          "description": "All 4 models on one graph. Lower is better. AWQ should be lowest, LoRA ≈ FP16.",
+          "type": "bargauge",
+          "title": "P95 Latency \u2014 All Models",
+          "description": "Side-by-side P95 latency. Lower is better. AWQ should win. Judge may vary with scoring load.",
           "gridPos": {
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 56
+            "y": 50
           },
           "datasource": "Prometheus",
           "targets": [
@@ -912,23 +1443,44 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "s",
-              "custom": {
-                "fillOpacity": 5,
-                "lineWidth": 2
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 2
+                  },
+                  {
+                    "color": "red",
+                    "value": 5
+                  }
+                ]
               }
+            }
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 42,
-          "type": "timeseries",
-          "title": "Throughput — All Models",
-          "description": "Generation throughput across all models. Higher is better. AWQ should lead.",
+          "type": "bargauge",
+          "title": "Throughput \u2014 All Models",
+          "description": "Generation throughput comparison. Higher is better. AWQ should lead.",
           "gridPos": {
             "h": 8,
             "w": 8,
             "x": 8,
-            "y": 56
+            "y": 50
           },
           "datasource": "Prometheus",
           "targets": [
@@ -952,23 +1504,44 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "short",
-              "custom": {
-                "fillOpacity": 5,
-                "lineWidth": 2
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 10
+                  },
+                  {
+                    "color": "green",
+                    "value": 30
+                  }
+                ]
               }
+            }
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 43,
-          "type": "timeseries",
-          "title": "GPU KV-Cache — All Models",
-          "description": "GPU memory comparison. AWQ should be lowest, FP16/LoRA similar, Judge varies with load.",
+          "type": "bargauge",
+          "title": "GPU Cache \u2014 All Models",
+          "description": "KV-cache usage comparison. AWQ should be lowest due to quantization.",
           "gridPos": {
             "h": 8,
             "w": 8,
             "x": 16,
-            "y": 56
+            "y": 50
           },
           "datasource": "Prometheus",
           "targets": [
@@ -992,24 +1565,105 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "percent",
-              "max": 100,
-              "custom": {
-                "fillOpacity": 5,
-                "lineWidth": 2
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 60
+                  },
+                  {
+                    "color": "red",
+                    "value": 85
+                  }
+                ]
               }
+            }
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 44,
-          "type": "timeseries",
-          "title": "Request Rate — All Models",
-          "description": "Per-model request rate. Shows traffic distribution during benchmark runs.",
+          "type": "bargauge",
+          "title": "TTFT \u2014 All Models",
+          "description": "Time to first token comparison. Lower is better. Shows prefill speed differences.",
           "gridPos": {
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 64
+            "y": 58
+          },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-awq\",job=\"vllm-models\"}[15m])))",
+              "legendFormat": "AWQ (4-bit)"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[15m])))",
+              "legendFormat": "FP16 Baseline"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-lora\",job=\"vllm-models\"}[15m])))",
+              "legendFormat": "LoRA"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-judge\",job=\"vllm-models\"}[15m])))",
+              "legendFormat": "Judge"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 3
+                  }
+                ]
+              }
+            }
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 45,
+          "type": "bargauge",
+          "title": "Request Rate \u2014 All Models",
+          "description": "Per-model request rate. Shows traffic distribution during benchmark runs.",
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 8,
+            "y": 58
           },
           "datasource": "Prometheus",
           "targets": [
@@ -1033,73 +1687,46 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "reqps",
-              "custom": {
-                "fillOpacity": 5,
-                "lineWidth": 2
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
               }
             }
-          }
-        },
-        {
-          "id": 45,
-          "type": "timeseries",
-          "title": "TTFT — All Models",
-          "description": "Time to first token across all models. AWQ should be fastest (smallest model).",
-          "gridPos": {
-            "h": 8,
-            "w": 8,
-            "x": 8,
-            "y": 64
           },
-          "datasource": "Prometheus",
-          "targets": [
-            {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-awq\",job=\"vllm-models\"}[15m])))",
-              "legendFormat": "AWQ (4-bit)"
-            },
-            {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-fp16\",job=\"vllm-models\"}[15m])))",
-              "legendFormat": "FP16 Baseline"
-            },
-            {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-lora\",job=\"vllm-models\"}[15m])))",
-              "legendFormat": "LoRA"
-            },
-            {
-              "expr": "histogram_quantile(0.95, sum by (le)(rate(vllm:time_to_first_token_seconds_bucket{app=\"mistral-7b-judge\",job=\"vllm-models\"}[15m])))",
-              "legendFormat": "Judge"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "s",
-              "custom": {
-                "fillOpacity": 5,
-                "lineWidth": 2
-              }
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           }
         },
         {
           "id": 46,
           "type": "timeseries",
-          "title": "Queue Depth — All Models",
-          "description": "Requests running + waiting per model. Any model with rising 'waiting' needs attention.",
+          "title": "Queue Depth \u2014 All Models",
+          "description": "Running + waiting requests per model over time. Rising 'waiting' on any model needs attention.",
           "gridPos": {
             "h": 8,
             "w": 8,
             "x": 16,
-            "y": 64
+            "y": 58
           },
           "datasource": "Prometheus",
           "targets": [
             {
               "expr": "vllm:num_requests_running{app=\"mistral-7b-awq\",job=\"vllm-models\"}",
-              "legendFormat": "AWQ running"
+              "legendFormat": "AWQ (4-bit) running"
             },
             {
               "expr": "vllm:num_requests_running{app=\"mistral-7b-fp16\",job=\"vllm-models\"}",
-              "legendFormat": "FP16 running"
+              "legendFormat": "FP16 Baseline running"
             },
             {
               "expr": "vllm:num_requests_running{app=\"mistral-7b-lora\",job=\"vllm-models\"}",
@@ -1116,6 +1743,7 @@ data:
           ],
           "fieldConfig": {
             "defaults": {
+              "unit": "short",
               "custom": {
                 "fillOpacity": 5,
                 "lineWidth": 2
@@ -1124,14 +1752,270 @@ data:
           }
         },
         {
-          "id": 50,
+          "id": 60,
           "type": "row",
-          "title": "📝 Benchmark Traces & Logs",
+          "title": "\ud83d\udcca Benchmark Run Summary",
           "gridPos": {
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 72
+            "y": 66
+          },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "id": 61,
+          "type": "stat",
+          "title": "Total Benchmark Requests",
+          "description": "Total harness requests across all teams in the last hour.",
+          "gridPos": {
+            "h": 6,
+            "w": 4,
+            "x": 0,
+            "y": 67
+          },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum(increase(lab_harness_requests_total[1h]))",
+              "legendFormat": "Requests"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background"
+          }
+        },
+        {
+          "id": 62,
+          "type": "gauge",
+          "title": "Overall Pass Rate",
+          "description": "Combined benchmark pass rate across all teams. Target: >80%.",
+          "gridPos": {
+            "h": 6,
+            "w": 4,
+            "x": 4,
+            "y": 67
+          },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum(increase(lab_harness_pass_total[1h])) / sum(increase(lab_harness_requests_total[1h])) * 100",
+              "legendFormat": "Pass %"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "min": 0,
+              "max": 100,
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 50
+                  },
+                  {
+                    "color": "green",
+                    "value": 80
+                  }
+                ]
+              }
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 63,
+          "type": "stat",
+          "title": "Avg Harness Latency",
+          "description": "Average end-to-end latency across all harness requests.",
+          "gridPos": {
+            "h": 6,
+            "w": 4,
+            "x": 8,
+            "y": 67
+          },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum(rate(lab_harness_latency_ms_sum[15m])) / sum(rate(lab_harness_latency_ms_count[15m]))",
+              "legendFormat": "Avg Latency"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ms",
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 500
+                  },
+                  {
+                    "color": "red",
+                    "value": 2000
+                  }
+                ]
+              }
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background"
+          }
+        },
+        {
+          "id": 64,
+          "type": "bargauge",
+          "title": "Pass Rate by Team",
+          "description": "Benchmark pass rate broken down by team. Shows which team's model optimization is winning.",
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 12,
+            "y": 67
+          },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum(increase(lab_harness_pass_total{team=\"quant\"}[1h])) / sum(increase(lab_harness_requests_total{team=\"quant\"}[1h])) * 100",
+              "legendFormat": "Quant"
+            },
+            {
+              "expr": "sum(increase(lab_harness_pass_total{team=\"finetune\"}[1h])) / sum(increase(lab_harness_requests_total{team=\"finetune\"}[1h])) * 100",
+              "legendFormat": "Finetune"
+            },
+            {
+              "expr": "sum(increase(lab_harness_pass_total{team=\"eval\"}[1h])) / sum(increase(lab_harness_requests_total{team=\"eval\"}[1h])) * 100",
+              "legendFormat": "Eval"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 50
+                  },
+                  {
+                    "color": "green",
+                    "value": 80
+                  }
+                ]
+              }
+            }
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 65,
+          "type": "bargauge",
+          "title": "Gateway Traffic by Team",
+          "description": "Gateway request volume per team in the last hour. Confirms benchmark traffic distribution.",
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 18,
+            "y": 67
+          },
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum(increase(lab_gateway_requests_total{team=\"quant\"}[1h]))",
+              "legendFormat": "Quant"
+            },
+            {
+              "expr": "sum(increase(lab_gateway_requests_total{team=\"finetune\"}[1h]))",
+              "legendFormat": "Finetune"
+            },
+            {
+              "expr": "sum(increase(lab_gateway_requests_total{team=\"eval\"}[1h]))",
+              "legendFormat": "Eval"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            }
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 50,
+          "type": "row",
+          "title": "\ud83d\udcdd Benchmark Traces & Logs",
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 73
           },
           "collapsed": false,
           "panels": []
@@ -1145,7 +2029,7 @@ data:
             "h": 10,
             "w": 12,
             "x": 0,
-            "y": 73
+            "y": 74
           },
           "datasource": "Loki",
           "targets": [
@@ -1169,7 +2053,7 @@ data:
             "h": 10,
             "w": 12,
             "x": 12,
-            "y": 73
+            "y": 74
           },
           "datasource": "Prometheus",
           "targets": [
@@ -1225,7 +2109,9 @@ data:
 
   llm-operations.json: |
     {
-      "annotations": { "list": [] },
+      "annotations": {
+        "list": []
+      },
       "editable": true,
       "fiscalYearStartMonth": 0,
       "graphTooltip": 0,
@@ -1236,7 +2122,12 @@ data:
           "id": 1,
           "title": "LLM Platform Operations",
           "type": "llmplatform-ops-panel",
-          "gridPos": { "h": 24, "w": 24, "x": 0, "y": 0 },
+          "gridPos": {
+            "h": 24,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
           "options": {
             "gatewayUrl": "/gateway-proxy"
           }
@@ -1244,9 +2135,17 @@ data:
       ],
       "refresh": "30s",
       "schemaVersion": 39,
-      "tags": ["llm", "operations"],
-      "templating": { "list": [] },
-      "time": { "from": "now-1h", "to": "now" },
+      "tags": [
+        "llm",
+        "operations"
+      ],
+      "templating": {
+        "list": []
+      },
+      "time": {
+        "from": "now-1h",
+        "to": "now"
+      },
       "title": "LLM Operations Console",
       "uid": "llm-operations-console"
     }
