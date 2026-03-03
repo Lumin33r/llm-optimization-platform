@@ -240,11 +240,8 @@ jobs:
 
       - name: Wait for rollouts
         run: |
-          echo "=== Waiting for platform services ==="
+          echo "=== Waiting for platform services (no LLM dependency) ==="
           kubectl rollout status deployment/gateway -n platform --timeout=300s
-          kubectl rollout status deployment/quant-api -n quant --timeout=300s
-          kubectl rollout status deployment/finetune-api -n finetune --timeout=300s
-          kubectl rollout status deployment/eval-api -n eval --timeout=300s
 
           echo "=== Waiting for data engine ==="
           kubectl rollout status deployment/data-engine -n platform --timeout=300s
@@ -253,8 +250,7 @@ jobs:
           kubectl rollout status deployment/grafana -n observability --timeout=300s
           kubectl rollout status deployment/prometheus -n observability --timeout=300s
 
-          echo "=== Waiting for LLM models (may take several minutes for model download) ==="
-          # Wait for each of the 4 model variants — fail if ANY model doesn't come up
+          echo "=== Waiting for LLM models (must be ready before API services) ==="
           FAILED_MODELS=""
           for model in mistral-7b-awq mistral-7b-fp16 mistral-7b-lora mistral-7b-judge; do
             echo "  Waiting for $model..."
@@ -268,6 +264,15 @@ jobs:
             echo "Check pod logs: kubectl logs -n llm-baseline -l app=<model> --tail=50"
             exit 1
           fi
+
+          echo "=== Waiting for API services (depend on LLM models) ==="
+          # Restart deployments to clear stale ProgressDeadlineExceeded state
+          kubectl rollout restart deployment/quant-api -n quant
+          kubectl rollout restart deployment/finetune-api -n finetune
+          kubectl rollout restart deployment/eval-api -n eval
+          kubectl rollout status deployment/quant-api -n quant --timeout=300s
+          kubectl rollout status deployment/finetune-api -n finetune --timeout=300s
+          kubectl rollout status deployment/eval-api -n eval --timeout=300s
 
       # NOTE: Gateway URL patching is no longer needed. The Grafana pod runs an
       # nginx reverse proxy sidecar that proxies /gateway-proxy/ to the gateway's
