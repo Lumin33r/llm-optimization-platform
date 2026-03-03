@@ -193,6 +193,35 @@ jobs:
           fi
           echo "✓ All ECR images verified"
 
+      - name: Scale up GPU node group
+        run: |
+          echo "Scaling GPU node group to desired_size=4 for LLM model deployments..."
+          aws eks update-nodegroup-config \
+            --cluster-name ${{ env.EKS_CLUSTER }} \
+            --nodegroup-name llmplatform-dev-gpu \
+            --scaling-config desiredSize=4,minSize=0,maxSize=4 \
+            --region us-west-2
+
+          echo "Waiting for GPU nodes to become Ready..."
+          TIMEOUT=600
+          INTERVAL=15
+          ELAPSED=0
+          while true; do
+            READY=$(kubectl get nodes -l role=gpu --no-headers 2>/dev/null | grep -c " Ready" || true)
+            echo "  GPU nodes ready: $READY / 4 (${ELAPSED}s elapsed)"
+            if [ "$READY" -ge 4 ]; then
+              echo "✓ All GPU nodes are Ready"
+              break
+            fi
+            if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
+              echo "::error::Timed out waiting for GPU nodes after ${TIMEOUT}s ($READY/4 ready)"
+              echo "Check: aws eks describe-nodegroup --cluster-name ${{ env.EKS_CLUSTER }} --nodegroup-name llmplatform-dev-gpu"
+              exit 1
+            fi
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+
       - name: Deploy base platform (namespaces + services)
         run: |
           kubectl apply -k k8s/overlays/dev/
