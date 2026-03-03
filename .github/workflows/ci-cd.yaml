@@ -13,6 +13,13 @@ on:
     paths:
       - "services/**"
       - "k8s/**"
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Service to build and deploy (or 'all')"
+        required: true
+        default: "all"
+        type: string
 
 env:
   AWS_REGION: us-west-2
