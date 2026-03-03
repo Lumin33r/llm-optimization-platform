@@ -17,9 +17,9 @@ node_groups = {
     taints = []
   }
   gpu = {
-    instance_types = ["g4dn.xlarge"]
+    instance_types = ["g4dn.xlarge", "g4dn.2xlarge", "g5.xlarge"]
     disk_size      = 100
-    desired_size   = 4
+    desired_size   = 0
     min_size       = 0
     max_size       = 4
     ami_type       = "AL2_x86_64_GPU"
