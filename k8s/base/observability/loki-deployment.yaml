@@ -53,8 +53,7 @@ spec:
   accessModes: [ReadWriteOnce]
   resources:
     requests:
-      storage: 50Gi
-  storageClassName: gp2
+      storage: 10Gi
 ---
 apiVersion: v1
 kind: ConfigMap
