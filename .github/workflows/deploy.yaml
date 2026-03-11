@@ -254,7 +254,7 @@ jobs:
           FAILED_MODELS=""
           for model in mistral-7b-awq mistral-7b-fp16 mistral-7b-lora mistral-7b-judge; do
             echo "  Waiting for $model..."
-            if ! kubectl rollout status deployment/$model -n llm-baseline --timeout=600s; then
+            if ! kubectl rollout status deployment/$model -n llm-baseline --timeout=1200s; then
               echo "::error::Model $model failed to roll out"
               FAILED_MODELS="$FAILED_MODELS $model"
             fi

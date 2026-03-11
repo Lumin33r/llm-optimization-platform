@@ -12,6 +12,7 @@ metadata:
     app.kubernetes.io/component: model-judge
 spec:
   replicas: 1
+  progressDeadlineSeconds: 1200
   strategy:
     type: Recreate
   selector:
@@ -36,12 +37,14 @@ spec:
           effect: "NoSchedule"
       affinity:
         podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                  - key: model-variant
-                    operator: Exists
-              topologyKey: "kubernetes.io/hostname"
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: model-variant
+                      operator: Exists
+                topologyKey: "kubernetes.io/hostname"
       containers:
         - name: vllm
           image: vllm/vllm-openai:v0.6.6
