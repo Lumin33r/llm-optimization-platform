@@ -143,6 +143,14 @@ resource "aws_iam_openid_connect_provider" "eks" {
   tags            = var.tags
 }
 
+# NVIDIA Device Plugin — exposes nvidia.com/gpu on GPU nodes for vLLM model scheduling
+resource "aws_eks_addon" "nvidia_device_plugin" {
+  cluster_name = aws_eks_cluster.main.name
+  addon_name   = "nvidia-device-plugin"
+
+  depends_on = [aws_eks_node_group.main]
+}
+
 # EBS CSI Driver — required for dynamic PersistentVolume provisioning
 resource "aws_eks_addon" "ebs_csi" {
   cluster_name             = aws_eks_cluster.main.name

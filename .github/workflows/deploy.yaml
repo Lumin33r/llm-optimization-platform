@@ -222,8 +222,50 @@ jobs:
             ELAPSED=$((ELAPSED + INTERVAL))
           done
 
+      - name: Install NVIDIA device plugin
+        run: |
+          echo "Installing NVIDIA device plugin on GPU nodes..."
+          kubectl apply -f k8s/base/nvidia-device-plugin.yaml
+
+          echo "Waiting for NVIDIA device plugin to register GPUs..."
+          TIMEOUT=180
+          INTERVAL=10
+          ELAPSED=0
+          while true; do
+            GPU_NODES=$(kubectl get nodes -l nvidia.com/gpu.present=true \
+              -o jsonpath='{range .items[*]}{.status.allocatable.nvidia\.com/gpu}{"\n"}{end}' \
+              2>/dev/null | grep -c "^[1-9]" || true)
+            echo "  Nodes with allocatable GPUs: $GPU_NODES / 4 (${ELAPSED}s elapsed)"
+            if [ "$GPU_NODES" -ge 4 ]; then
+              echo "✓ NVIDIA device plugin is running — GPUs are allocatable"
+              break
+            fi
+            if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
+              echo "::warning::Only $GPU_NODES/4 GPU nodes have allocatable GPUs after ${TIMEOUT}s"
+              echo "Proceeding — some model pods may remain Pending"
+              break
+            fi
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+
       - name: Deploy base platform (namespaces + services)
         run: |
+          # Verify SageMaker endpoints are InService before deploying services
+          echo "=== Checking SageMaker endpoints ==="
+          for ep in llmplatform-dev-quant-endpoint llmplatform-dev-finetune-endpoint llmplatform-dev-eval-endpoint; do
+            STATUS=$(aws sagemaker describe-endpoint --endpoint-name "$ep" --region us-west-2 --query 'EndpointStatus' --output text 2>/dev/null || echo "NOT_FOUND")
+            if [ "$STATUS" = "InService" ]; then
+              echo "✓ $ep is InService"
+            elif [ "$STATUS" = "Creating" ]; then
+              echo "  $ep is Creating — waiting (this may take 5-10 minutes)..."
+              aws sagemaker wait endpoint-in-service --endpoint-name "$ep" --region us-west-2
+              echo "✓ $ep is InService"
+            else
+              echo "::warning::$ep status: $STATUS — team service readiness may be affected"
+            fi
+          done
+
           kubectl apply -k k8s/overlays/dev/
 
       - name: Deploy observability stack
@@ -351,7 +393,7 @@ jobs:
           fi
           echo ""
           if [ -n "$GATEWAY_HOST" ]; then
-            echo "  Gateway:  http://${GATEWAY_HOST}:8000"
+            echo "  Gateway:  http://${GATEWAY_HOST}:8000/docs"
             echo "  Health:   http://${GATEWAY_HOST}:8000/health"
             echo "  Ops API:  http://${GATEWAY_HOST}:8000/ops/health"
           else
@@ -370,7 +412,7 @@ jobs:
             echo "| **Grafana** | _LoadBalancer pending_ |" >> $GITHUB_STEP_SUMMARY
           fi
           if [ -n "$GATEWAY_HOST" ]; then
-            echo "| **Gateway** | http://${GATEWAY_HOST}:8000 |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Gateway** | http://${GATEWAY_HOST}:8000/docs |" >> $GITHUB_STEP_SUMMARY
             echo "| **Health** | http://${GATEWAY_HOST}:8000/health |" >> $GITHUB_STEP_SUMMARY
             echo "| **Ops API** | http://${GATEWAY_HOST}:8000/ops/health |" >> $GITHUB_STEP_SUMMARY
           else

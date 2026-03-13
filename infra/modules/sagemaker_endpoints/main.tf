@@ -6,10 +6,14 @@ resource "aws_sagemaker_model" "team" {
 
   primary_container {
     image          = var.inference_image
-    model_data_url = each.value.model_data_url
-    environment = {
-      MODEL_NAME = each.value.model_name
-    }
+    model_data_url = each.value.model_data_url != "" ? each.value.model_data_url : null
+    environment = merge(
+      {
+        HF_MODEL_ID = each.value.model_name
+        SM_NUM_GPUS = "1"
+      },
+      var.hf_token != "" ? { HUGGING_FACE_HUB_TOKEN = var.hf_token } : {}
+    )
   }
 }
 

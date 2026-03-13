@@ -35,11 +35,12 @@ output "grafana_url" {
 # SageMaker Endpoints
 output "sagemaker_endpoint_names" {
   description = "SageMaker endpoint names per team"
-  value = {
-    quant    = "quant-endpoint"
-    finetune = "finetune-endpoint"
-    eval     = "eval-endpoint"
-  }
+  value       = module.sagemaker_endpoints.endpoint_names
+}
+
+output "sagemaker_endpoint_arns" {
+  description = "SageMaker endpoint ARNs per team"
+  value       = module.sagemaker_endpoints.endpoint_arns
 }
 
 # IRSA Role ARNs

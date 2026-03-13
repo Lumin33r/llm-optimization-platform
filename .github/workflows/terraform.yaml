@@ -95,6 +95,8 @@ jobs:
       - name: Terraform Plan
         id: plan
         working-directory: infra/envs/${{ matrix.environment }}
+        env:
+          TF_VAR_hf_token: ${{ secrets.HF_TOKEN }}
         run: |
           set -o pipefail
           terraform plan -no-color -out=tfplan 2>&1 | tee plan_output.txt
@@ -200,6 +202,8 @@ jobs:
       - name: Generate Plan (if artifact missing)
         if: steps.download-plan.outcome == 'failure'
         working-directory: infra/envs/${{ matrix.environment }}
+        env:
+          TF_VAR_hf_token: ${{ secrets.HF_TOKEN }}
         run: |
           echo "::warning::No plan artifact found — generating a fresh plan"
           set -o pipefail
@@ -207,6 +211,8 @@ jobs:
 
       - name: Terraform Apply
         working-directory: infra/envs/${{ matrix.environment }}
+        env:
+          TF_VAR_hf_token: ${{ secrets.HF_TOKEN }}
         run: terraform apply -auto-approve tfplan
 
       - name: Output Results

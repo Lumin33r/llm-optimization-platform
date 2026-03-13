@@ -153,6 +153,108 @@ module "k8s_namespaces" {
   depends_on = [module.eks]
 }
 
+# SageMaker Execution Role
+resource "aws_iam_role" "sagemaker_execution" {
+  name = "${var.project}-${var.environment}-sagemaker-execution"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "sagemaker.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = local.tags
+}
+
+resource "aws_iam_role_policy" "sagemaker_execution" {
+  name = "sagemaker-execution"
+  role = aws_iam_role.sagemaker_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ECRAccess"
+        Effect = "Allow"
+        Action = [
+          "ecr:GetAuthorizationToken",
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "S3ModelArtifacts"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          "arn:aws:s3:::${var.project}-*",
+          "arn:aws:s3:::${var.project}-*/*"
+        ]
+      },
+      {
+        Sid    = "CloudWatchLogs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams",
+          "cloudwatch:PutMetricData"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# SageMaker Endpoints (one per team)
+module "sagemaker_endpoints" {
+  source = "../../modules/sagemaker_endpoints"
+
+  project            = var.project
+  environment        = var.environment
+  sagemaker_role_arn = aws_iam_role.sagemaker_execution.arn
+
+  # HuggingFace TGI inference container (GPU, PyTorch 2.1)
+  inference_image = "763104351884.dkr.ecr.${var.aws_region}.amazonaws.com/huggingface-pytorch-tgi-inference:2.1.1-tgi1.4.5-gpu-py310-cu121-ubuntu22.04"
+
+  hf_token = var.hf_token
+
+  endpoints = {
+    quant = {
+      model_name     = "TheBloke/Mistral-7B-Instruct-v0.2-AWQ"
+      instance_type  = "ml.g5.xlarge"
+      instance_count = 1
+    }
+    finetune = {
+      model_name     = "TheBloke/Mistral-7B-Instruct-v0.2-AWQ"
+      instance_type  = "ml.g5.xlarge"
+      instance_count = 1
+    }
+    eval = {
+      model_name     = "TheBloke/Mistral-7B-Instruct-v0.2-AWQ"
+      instance_type  = "ml.g5.xlarge"
+      instance_count = 1
+    }
+  }
+
+  tags = local.tags
+
+  depends_on = [aws_iam_role_policy.sagemaker_execution]
+}
+
 locals {
   tags = {
     Project     = var.project
@@ -210,10 +312,10 @@ locals {
         min_memory             = "128Mi"
       }
       config_data = {
-        AWS_REGION         = var.aws_region
-        SAGEMAKER_ENDPOINT = "quant-endpoint"
-        LOG_LEVEL          = "DEBUG"
-        ENABLE_FALLBACK    = "false"
+        AWS_REGION              = var.aws_region
+        SAGEMAKER_ENDPOINT_NAME = "${var.project}-${var.environment}-quant-endpoint"
+        LOG_LEVEL               = "DEBUG"
+        ENABLE_FALLBACK         = "false"
       }
       irsa_role_arn = module.irsa_quant.role_arn
     }
@@ -239,10 +341,10 @@ locals {
         min_memory             = "128Mi"
       }
       config_data = {
-        AWS_REGION         = var.aws_region
-        SAGEMAKER_ENDPOINT = "finetune-endpoint"
-        LOG_LEVEL          = "DEBUG"
-        AB_ROUTING_ENABLED = "true"
+        AWS_REGION              = var.aws_region
+        SAGEMAKER_ENDPOINT_NAME = "${var.project}-${var.environment}-finetune-endpoint"
+        LOG_LEVEL               = "DEBUG"
+        AB_ROUTING_ENABLED      = "true"
       }
       irsa_role_arn = module.irsa_finetune.role_arn
     }
@@ -268,9 +370,9 @@ locals {
         min_memory             = "128Mi"
       }
       config_data = {
-        AWS_REGION         = var.aws_region
-        SAGEMAKER_ENDPOINT = "eval-endpoint"
-        LOG_LEVEL          = "DEBUG"
+        AWS_REGION              = var.aws_region
+        SAGEMAKER_ENDPOINT_NAME = "${var.project}-${var.environment}-eval-endpoint"
+        LOG_LEVEL               = "DEBUG"
       }
       irsa_role_arn = module.irsa_eval.role_arn
     }

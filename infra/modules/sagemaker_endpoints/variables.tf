@@ -24,12 +24,19 @@ variable "endpoints" {
     model_name     = string
     instance_type  = string
     instance_count = number
-    model_data_url = string # S3 path to model artifacts
+    model_data_url = optional(string, "") # S3 path — leave empty for HF Hub models
     variants = optional(list(object({
       name   = string
       weight = number
     })))
   }))
+}
+
+variable "hf_token" {
+  description = "HuggingFace Hub API token for gated model access"
+  type        = string
+  sensitive   = true
+  default     = ""
 }
 
 variable "tags" {

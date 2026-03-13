@@ -46,3 +46,10 @@ variable "node_groups" {
     }))
   }))
 }
+
+variable "hf_token" {
+  description = "HuggingFace Hub API token for SageMaker model access"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
