@@ -237,16 +237,19 @@ module "sagemaker_endpoints" {
       model_name     = "TheBloke/Mistral-7B-Instruct-v0.2-AWQ"
       instance_type  = "ml.g5.xlarge"
       instance_count = 1
+      quantize       = "awq"
     }
     finetune = {
       model_name     = "TheBloke/Mistral-7B-Instruct-v0.2-AWQ"
       instance_type  = "ml.g5.xlarge"
       instance_count = 1
+      quantize       = "awq"
     }
     eval = {
       model_name     = "TheBloke/Mistral-7B-Instruct-v0.2-AWQ"
       instance_type  = "ml.g5.xlarge"
       instance_count = 1
+      quantize       = "awq"
     }
   }
 

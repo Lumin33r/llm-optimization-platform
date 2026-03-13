@@ -60,16 +60,16 @@ graph TD
 
 ## Module Summary
 
-| Module                | Resources Created                                         |
-| --------------------- | --------------------------------------------------------- |
-| `vpc`                 | VPC, subnets (public/private), NAT Gateway, route tables  |
-| `eks`                 | EKS cluster, managed node groups (general + GPU SPOT)     |
-| `ecr`                 | ECR repositories per service with lifecycle policies      |
-| `iam_irsa`            | IRSA roles per team for SageMaker + CloudWatch access     |
-| `github_oidc`         | GitHub Actions OIDC provider + CI/CD IAM role             |
-| `k8s_namespaces`      | Kubernetes namespaces with ResourceQuotas and LimitRanges |
-| `observability`       | CloudWatch log groups, ALB Ingress Controller IRSA role   |
-| `sagemaker_endpoints` | SageMaker models, endpoint configs, endpoints per team    |
+| Module                | Resources Created                                                                         |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| `vpc`                 | VPC, subnets (public/private), NAT Gateway, route tables                                  |
+| `eks`                 | EKS cluster, managed node groups (general + GPU SPOT)                                     |
+| `ecr`                 | ECR repositories per service with lifecycle policies                                      |
+| `iam_irsa`            | IRSA roles per team for SageMaker + CloudWatch access                                     |
+| `github_oidc`         | GitHub Actions OIDC provider + CI/CD IAM role                                             |
+| `k8s_namespaces`      | Kubernetes namespaces with ResourceQuotas and LimitRanges                                 |
+| `observability`       | CloudWatch log groups, ALB Ingress Controller IRSA role                                   |
+| `sagemaker_endpoints` | SageMaker execution IAM, models, endpoint configs, live endpoints per team (ml.g5.xlarge) |
 
 ## State Management
 
@@ -106,16 +106,16 @@ node_groups = {
 
 How each Terraform module maps to the LLM Optimization Platform architecture.
 
-| Module                                                | What It Provisions                                                                                                                                                                                  | Role in the LLM Optimization Platform                                                                                                                                                                                                                                                                                                                                              |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **vpc** (20 resources)                                | VPC, 3 public + 3 private subnets across us-west-2a/b/c, Internet Gateway, single NAT Gateway, route tables, and associations                                                                       | The network foundation — isolates all platform traffic in a dedicated VPC, places EKS worker nodes in private subnets for security, and exposes only the ALB in public subnets so users can reach the Gateway API. The NAT Gateway lets private workloads call SageMaker, ECR, and CloudWatch without public IPs.                                                                  |
-| **eks** (15 resources)                                | EKS cluster (K8s 1.29), general-purpose node group (t3.medium), GPU SPOT node group (g4dn/g5), OIDC provider, EBS CSI driver, cluster/node IAM roles and policy attachments, cluster security group | The compute engine — orchestrates all six platform microservices (gateway, quant-api, finetune-api, eval-api, grafana-plugin, data-engine) as Kubernetes pods. The general node group handles API traffic and observability; the GPU SPOT group scales from zero for quantization and fine-tuning inference. IRSA via the OIDC provider gives each service scoped AWS credentials. |
-| **ecr** (12 resources)                                | 6 ECR repositories (gateway, quant-api, finetune-api, eval-api, grafana-plugin, data-engine) with KMS encryption and scan-on-push, plus 6 lifecycle policies                                        | The container registry — stores versioned Docker images for every platform service. CI/CD pushes images here; EKS nodes pull them at deploy time. Lifecycle policies cap storage at 15 tagged images and expire untagged builds after 7 days.                                                                                                                                      |
-| **iam_irsa** (11 resources across 4 instances)        | 4 IRSA IAM roles (quant-api, finetune-api, eval-api, gateway) with SageMaker invoke and/or CloudWatch inline policies                                                                               | The identity layer — each team's Kubernetes service account is bound to a scoped IAM role via IRSA. Quant, finetune, and eval services get `sagemaker:InvokeEndpoint` on their respective endpoints; gateway gets CloudWatch-only. No static AWS keys exist anywhere in the platform.                                                                                              |
-| **k8s_namespaces** (25 resources across 5 namespaces) | 5 namespaces (platform, quant, finetune, eval, observability), each with a ResourceQuota, LimitRange, ConfigMap, and IRSA-annotated ServiceAccount                                                  | The multi-tenancy layer — isolates each team's workloads with resource quotas (CPU/memory/pod caps) and injects environment config (SageMaker endpoint names, region, log levels) via ConfigMaps. ServiceAccounts bind IRSA roles so pods automatically receive their AWS credentials.                                                                                             |
-| **github_oidc** (5 resources)                         | GitHub Actions OIDC provider, CI/CD IAM role with ECR push, EKS deploy, and Terraform state access policies                                                                                         | The CI/CD identity — lets GitHub Actions assume an AWS role without long-lived secrets. Workflows build images → push to ECR → deploy manifests to EKS → run Terraform plan/apply, all authenticated via short-lived OIDC tokens scoped to the repo's main/develop branches.                                                                                                       |
-| **observability** (5 resources)                       | CloudWatch log group for EKS, ALB Ingress Controller IRSA role + policy, External Secrets Operator IRSA role + policy                                                                               | The monitoring and ingress plumbing — centralizes cluster logs in CloudWatch, enables the ALB controller to provision load balancers that route traffic to the Gateway, and allows the External Secrets Operator to pull secrets from AWS Secrets Manager into Kubernetes.                                                                                                         |
-| **sagemaker_endpoints** (per-team, variable count)    | SageMaker models, endpoint configurations (with A/B variant support), and live endpoints per team                                                                                                   | The ML inference layer — hosts optimized LLM models behind SageMaker endpoints that the platform's APIs invoke. Each team (quant, finetune, eval) gets its own model + endpoint config + endpoint, enabling independent model deployments and A/B traffic splitting between model variants.                                                                                        |
+| Module                                                     | What It Provisions                                                                                                                                                                                  | Role in the LLM Optimization Platform                                                                                                                                                                                                                                                                                                                                              |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **vpc** (20 resources)                                     | VPC, 3 public + 3 private subnets across us-west-2a/b/c, Internet Gateway, single NAT Gateway, route tables, and associations                                                                       | The network foundation — isolates all platform traffic in a dedicated VPC, places EKS worker nodes in private subnets for security, and exposes only the ALB in public subnets so users can reach the Gateway API. The NAT Gateway lets private workloads call SageMaker, ECR, and CloudWatch without public IPs.                                                                  |
+| **eks** (15 resources)                                     | EKS cluster (K8s 1.29), general-purpose node group (t3.medium), GPU SPOT node group (g4dn/g5), OIDC provider, EBS CSI driver, cluster/node IAM roles and policy attachments, cluster security group | The compute engine — orchestrates all six platform microservices (gateway, quant-api, finetune-api, eval-api, grafana-plugin, data-engine) as Kubernetes pods. The general node group handles API traffic and observability; the GPU SPOT group scales from zero for quantization and fine-tuning inference. IRSA via the OIDC provider gives each service scoped AWS credentials. |
+| **ecr** (12 resources)                                     | 6 ECR repositories (gateway, quant-api, finetune-api, eval-api, grafana-plugin, data-engine) with KMS encryption and scan-on-push, plus 6 lifecycle policies                                        | The container registry — stores versioned Docker images for every platform service. CI/CD pushes images here; EKS nodes pull them at deploy time. Lifecycle policies cap storage at 15 tagged images and expire untagged builds after 7 days.                                                                                                                                      |
+| **iam_irsa** (11 resources across 4 instances)             | 4 IRSA IAM roles (quant-api, finetune-api, eval-api, gateway) with SageMaker invoke and/or CloudWatch inline policies                                                                               | The identity layer — each team's Kubernetes service account is bound to a scoped IAM role via IRSA. Quant, finetune, and eval services get `sagemaker:InvokeEndpoint` on their respective endpoints; gateway gets CloudWatch-only. No static AWS keys exist anywhere in the platform.                                                                                              |
+| **k8s_namespaces** (25 resources across 5 namespaces)      | 5 namespaces (platform, quant, finetune, eval, observability), each with a ResourceQuota, LimitRange, ConfigMap, and IRSA-annotated ServiceAccount                                                  | The multi-tenancy layer — isolates each team's workloads with resource quotas (CPU/memory/pod caps) and injects environment config (SageMaker endpoint names, region, log levels) via ConfigMaps. ServiceAccounts bind IRSA roles so pods automatically receive their AWS credentials.                                                                                             |
+| **github_oidc** (5 resources)                              | GitHub Actions OIDC provider, CI/CD IAM role with ECR push, EKS deploy, and Terraform state access policies                                                                                         | The CI/CD identity — lets GitHub Actions assume an AWS role without long-lived secrets. Workflows build images → push to ECR → deploy manifests to EKS → run Terraform plan/apply, all authenticated via short-lived OIDC tokens scoped to the repo's main/develop branches.                                                                                                       |
+| **observability** (5 resources)                            | CloudWatch log group for EKS, ALB Ingress Controller IRSA role + policy, External Secrets Operator IRSA role + policy                                                                               | The monitoring and ingress plumbing — centralizes cluster logs in CloudWatch, enables the ALB controller to provision load balancers that route traffic to the Gateway, and allows the External Secrets Operator to pull secrets from AWS Secrets Manager into Kubernetes.                                                                                                         |
+| **sagemaker_endpoints** (11 resources: 2 IAM + 9 per-team) | SageMaker execution IAM role + policy and 3 teams × (model + endpoint config + endpoint) on ml.g5.xlarge with HuggingFace TGI container                                                             | The ML inference layer — hosts Mistral-7B-AWQ behind SageMaker endpoints (`llmplatform-dev-{quant,finetune,eval}-endpoint`) that the platform's team APIs invoke via IRSA. Each team gets its own model + endpoint config + endpoint, provisioned by Terraform and referenced in K8s ConfigMaps via `SAGEMAKER_ENDPOINT_NAME`.                                                     |
 
 ## Infrastructure Diagram
 
@@ -268,17 +268,19 @@ graph TB
         ES_POL["aws_iam_role_policy.external_secrets"]
     end
 
-    %% ── SageMaker Module (per-team) ──
-    subgraph SM_MOD["sagemaker_endpoints module &lpar;per team&rpar;"]
+    %% ── SageMaker IAM + Endpoints Module (11 resources) ──
+    subgraph SM_MOD["SageMaker &lpar;11 resources: 2 IAM + 9 per-team&rpar;"]
+        SM_ROLE["aws_iam_role.sagemaker_execution"]
+        SM_ROLE_POL["aws_iam_role_policy.sagemaker_execution\nECR + S3 + CloudWatch"]
         SM_MODEL_Q["aws_sagemaker_model · quant"]
         SM_CFG_Q["aws_sagemaker_endpoint_configuration · quant"]
-        SM_EP_Q["aws_sagemaker_endpoint · quant"]
+        SM_EP_Q["aws_sagemaker_endpoint · quant\nllmplatform-dev-quant-endpoint"]
         SM_MODEL_F["aws_sagemaker_model · finetune"]
         SM_CFG_F["aws_sagemaker_endpoint_configuration · finetune"]
-        SM_EP_F["aws_sagemaker_endpoint · finetune"]
+        SM_EP_F["aws_sagemaker_endpoint · finetune\nllmplatform-dev-finetune-endpoint"]
         SM_MODEL_E["aws_sagemaker_model · eval"]
         SM_CFG_E["aws_sagemaker_endpoint_configuration · eval"]
-        SM_EP_E["aws_sagemaker_endpoint · eval"]
+        SM_EP_E["aws_sagemaker_endpoint · eval\nllmplatform-dev-eval-endpoint"]
     end
 
     %% ── Connections ──
@@ -314,7 +316,7 @@ graph TB
     NODE_POL3 -->|"pulls from"| ECR_MOD
 ```
 
-## Complete Resource Inventory (83 Resources)
+## Complete Resource Inventory (94 Resources)
 
 All resources provisioned by the dev environment and how each connects to the LLM Optimization Platform.
 
@@ -425,6 +427,29 @@ All resources provisioned by the dev environment and how each connects to the LL
 | 81  | `kubernetes_service_account.team["finetune"]`      | ServiceAccount `finetune-sa` with IRSA annotation       | Binds the finetune-api IAM role to pods — enables SageMaker invoke and CloudWatch access                                         |
 | 82  | `kubernetes_service_account.team["eval"]`          | ServiceAccount `eval-sa` with IRSA annotation           | Binds the eval-api IAM role to pods — enables SageMaker invoke and CloudWatch access                                             |
 | 83  | `kubernetes_service_account.team["observability"]` | ServiceAccount `observability-sa` (no IRSA)             | Placeholder service account for future IRSA binding (e.g., Grafana CloudWatch data source)                                       |
+
+### SageMaker Execution IAM (2 resources)
+
+| #   | Resource                                  | Description                                                                              | Platform Connection                                                                                                                              |
+| --- | ----------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 84  | `aws_iam_role.sagemaker_execution`        | IAM role for SageMaker model containers (`sagemaker.amazonaws.com` assume-role)          | Allows SageMaker endpoints to pull HuggingFace TGI container images from ECR, read model artifacts from S3, and write logs/metrics to CloudWatch |
+| 85  | `aws_iam_role_policy.sagemaker_execution` | Inline policy granting ECR pull, S3 read (`llmplatform-*` buckets), and CloudWatch write | Scoped permissions for the SageMaker execution role — enables the 3 team endpoints to access container images and emit operational logs          |
+
+### SageMaker Endpoints Module (9 resources across 3 teams)
+
+Each team gets a SageMaker model → endpoint configuration → live endpoint chain, all running `TheBloke/Mistral-7B-Instruct-v0.2-AWQ` on HuggingFace TGI (`763104351884.dkr.ecr.us-west-2.amazonaws.com/huggingface-pytorch-tgi-inference:2.1.1-tgi1.4.5-gpu-py310-cu121-ubuntu22.04`) with `ml.g5.xlarge` instances.
+
+| #   | Resource                                                | Description                                                                  | Platform Connection                                                                                                              |
+| --- | ------------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 86  | `aws_sagemaker_model.team["quant"]`                     | Model: `llmplatform-dev-quant-model` (HF TGI container, Mistral-7B-AWQ)      | Defines the model container and HF_MODEL_ID for the quant team's SageMaker endpoint                                              |
+| 87  | `aws_sagemaker_endpoint_configuration.team["quant"]`    | Config: `llmplatform-dev-quant-config` (ml.g5.xlarge × 1, variant `default`) | Specifies instance type and production variant for the quant endpoint — single instance with full traffic weight                 |
+| 88  | `aws_sagemaker_endpoint.team["quant"]`                  | Live endpoint: **`llmplatform-dev-quant-endpoint`**                          | The live SageMaker endpoint that `quant-api` pods invoke via `SAGEMAKER_ENDPOINT_NAME` ConfigMap for model compression inference |
+| 89  | `aws_sagemaker_model.team["finetune"]`                  | Model: `llmplatform-dev-finetune-model` (HF TGI container, Mistral-7B-AWQ)   | Defines the model container and HF_MODEL_ID for the finetune team's SageMaker endpoint                                           |
+| 90  | `aws_sagemaker_endpoint_configuration.team["finetune"]` | Config: `llmplatform-dev-finetune-config` (ml.g5.xlarge × 1)                 | Specifies instance type for the finetune endpoint — supports A/B variant traffic splitting for LoRA adapter testing              |
+| 91  | `aws_sagemaker_endpoint.team["finetune"]`               | Live endpoint: **`llmplatform-dev-finetune-endpoint`**                       | The live SageMaker endpoint that `finetune-api` pods invoke for LoRA adapter inference and training                              |
+| 92  | `aws_sagemaker_model.team["eval"]`                      | Model: `llmplatform-dev-eval-model` (HF TGI container, Mistral-7B-AWQ)       | Defines the model container and HF_MODEL_ID for the eval team's SageMaker endpoint                                               |
+| 93  | `aws_sagemaker_endpoint_configuration.team["eval"]`     | Config: `llmplatform-dev-eval-config` (ml.g5.xlarge × 1)                     | Specifies instance type for the eval endpoint                                                                                    |
+| 94  | `aws_sagemaker_endpoint.team["eval"]`                   | Live endpoint: **`llmplatform-dev-eval-endpoint`**                           | The live SageMaker endpoint that `eval-api` pods invoke for model scoring and benchmark evaluation                               |
 
 ## Usage
 

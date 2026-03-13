@@ -25,6 +25,7 @@ variable "endpoints" {
     instance_type  = string
     instance_count = number
     model_data_url = optional(string, "") # S3 path — leave empty for HF Hub models
+    quantize       = optional(string, "") # Quantization method: "awq", "gptq", or "" for none
     variants = optional(list(object({
       name   = string
       weight = number

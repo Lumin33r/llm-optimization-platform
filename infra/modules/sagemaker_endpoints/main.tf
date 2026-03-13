@@ -12,6 +12,7 @@ resource "aws_sagemaker_model" "team" {
         HF_MODEL_ID = each.value.model_name
         SM_NUM_GPUS = "1"
       },
+      each.value.quantize != "" ? { HF_MODEL_QUANTIZE = each.value.quantize } : {},
       var.hf_token != "" ? { HUGGING_FACE_HUB_TOKEN = var.hf_token } : {}
     )
   }

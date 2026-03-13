@@ -307,6 +307,14 @@ graph TB
     NS_PLAT -. "patches" .-> OV_PROD
     NS_QUANT -. "patches" .-> OV_PROD
 
+    %% ── AWS SageMaker Endpoints (external) ───────────────
+    subgraph SAGEMAKER["☁ AWS SageMaker Endpoints (3)"]
+        direction LR
+        SM_QUANT["Endpoint\nllmplatform-dev-quant-endpoint\nml.g5.xlarge · Mistral-7B-AWQ"]
+        SM_FT["Endpoint\nllmplatform-dev-finetune-endpoint\nml.g5.xlarge · Mistral-7B-AWQ"]
+        SM_EVAL["Endpoint\nllmplatform-dev-eval-endpoint\nml.g5.xlarge · Mistral-7B-AWQ"]
+    end
+
     %% ── Data flows across namespaces ─────────────────────
     GW_SVC ==> |"/quant/*"| QUANT_SVC
     GW_SVC ==> |"/finetune/*"| FT_SVC
@@ -314,6 +322,9 @@ graph TB
     QUANT_SVC --> |"VLLM_BASE_URL"| AWQ_S
     FT_SVC --> |"VLLM_BASE_URL"| LORA_S
     EVAL_SVC --> |"VLLM_BASE_URL"| JUDGE_S
+    QUANT_DEP ==> |"sagemaker:InvokeEndpoint"| SM_QUANT
+    FT_DEP ==> |"sagemaker:InvokeEndpoint"| SM_FT
+    EVAL_DEP ==> |"sagemaker:InvokeEndpoint"| SM_EVAL
     PROM_SVC --> |"scrapes"| AWQ_S
     PROM_SVC --> |"scrapes"| GW_SVC
     OTEL_SVC -.-> |"traces → Tempo"| TEMPO_SVC
@@ -343,7 +354,9 @@ graph TB
     class LLM_PVC,PROM_PVC,LOKI_PVC,TEMPO_PVC storage
     class CR1,CRB1,CR2,CRB2,CR3,CRB3 rbac
     class OV_DEV,OV_PROD overlay
+    classDef sagemaker fill:#ff9900,stroke:#232f3e,color:#fff,stroke-width:2px
     class NVIDIA,GPU gpu
+    class SM_QUANT,SM_FT,SM_EVAL sagemaker
 ```
 
 ## Complete Kubernetes Resource Inventory
@@ -448,9 +461,9 @@ The quantization team's namespace — runs the API that applies GPTQ/AWQ model c
 
 #### ConfigMaps
 
-| #   | Resource Kind | Name           | Keys                                                                                                                                                                 | Platform Connection                                                                                                          |
-| --- | ------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| 26  | ConfigMap     | `quant-config` | `LOG_LEVEL`, `AWS_REGION`, `SAGEMAKER_ENDPOINT_NAME`, `VLLM_BASE_URL`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `SAGEMAKER_TIMEOUT_MS`, `ENABLE_FALLBACK` | Points quant-api to the `mistral-7b-awq` vLLM service and configures SageMaker endpoint name, timeout, and fallback behavior |
+| #   | Resource Kind | Name           | Keys                                                                                                                                                                 | Platform Connection                                                                                                                                                          |
+| --- | ------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 26  | ConfigMap     | `quant-config` | `LOG_LEVEL`, `AWS_REGION`, `SAGEMAKER_ENDPOINT_NAME`, `VLLM_BASE_URL`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `SAGEMAKER_TIMEOUT_MS`, `ENABLE_FALLBACK` | Points quant-api to the `mistral-7b-awq` vLLM service and SageMaker endpoint `llmplatform-dev-quant-endpoint` (ml.g5.xlarge); configures timeout (30s) and fallback behavior |
 
 ---
 
@@ -486,9 +499,9 @@ The fine-tuning team's namespace — runs the API that manages LoRA adapter trai
 
 #### ConfigMaps
 
-| #   | Resource Kind | Name              | Keys                                                                                                                                                                 | Platform Connection                                                                                                           |
-| --- | ------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| 33  | ConfigMap     | `finetune-config` | `LOG_LEVEL`, `AWS_REGION`, `SAGEMAKER_ENDPOINT_NAME`, `VLLM_BASE_URL`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `SAGEMAKER_TIMEOUT_MS`, `ENABLE_FALLBACK` | Points finetune-api to the `mistral-7b-lora` vLLM service and configures SageMaker endpoint, timeout, and A/B routing support |
+| #   | Resource Kind | Name              | Keys                                                                                                                                                                 | Platform Connection                                                                                                                                                                   |
+| --- | ------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 33  | ConfigMap     | `finetune-config` | `LOG_LEVEL`, `AWS_REGION`, `SAGEMAKER_ENDPOINT_NAME`, `VLLM_BASE_URL`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `SAGEMAKER_TIMEOUT_MS`, `ENABLE_FALLBACK` | Points finetune-api to the `mistral-7b-lora` vLLM service and SageMaker endpoint `llmplatform-dev-finetune-endpoint` (ml.g5.xlarge); configures timeout (60s) and A/B routing support |
 
 ---
 
@@ -524,9 +537,9 @@ The evaluation team's namespace — runs the API that benchmarks and scores opti
 
 #### ConfigMaps
 
-| #   | Resource Kind | Name          | Keys                                                                                                                                                                 | Platform Connection                                                                                        |
-| --- | ------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| 40  | ConfigMap     | `eval-config` | `LOG_LEVEL`, `AWS_REGION`, `SAGEMAKER_ENDPOINT_NAME`, `VLLM_BASE_URL`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `SAGEMAKER_TIMEOUT_MS`, `ENABLE_FALLBACK` | Points eval-api to the `mistral-7b-judge` vLLM service and configures SageMaker endpoint for model scoring |
+| #   | Resource Kind | Name          | Keys                                                                                                                                                                 | Platform Connection                                                                                                                                                      |
+| --- | ------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 40  | ConfigMap     | `eval-config` | `LOG_LEVEL`, `AWS_REGION`, `SAGEMAKER_ENDPOINT_NAME`, `VLLM_BASE_URL`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `SAGEMAKER_TIMEOUT_MS`, `ENABLE_FALLBACK` | Points eval-api to the `mistral-7b-judge` vLLM service and SageMaker endpoint `llmplatform-dev-eval-endpoint` (ml.g5.xlarge); configures timeout (45s) for model scoring |
 
 ---
 
