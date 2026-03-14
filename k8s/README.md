@@ -359,6 +359,97 @@ graph TB
     class SM_QUANT,SM_FT,SM_EVAL sagemaker
 ```
 
+## How Resources Chain Together — `finetune-api` Example
+
+This walkthrough shows how a single Deployment creates the full object chain, and how ResourceQuota and LimitRange govern what gets scheduled.
+
+### The Chain: Deployment → ReplicaSet → Pod → Container
+
+```
+Namespace: finetune
+├── ResourceQuota  finetune-quota        ← caps the ENTIRE namespace
+│       8 CPU / 16Gi requests, 16 CPU / 32Gi limits, 15 pods max
+├── LimitRange     finetune-limits       ← defaults/caps PER CONTAINER
+│       default 1 CPU / 2Gi,  max 4 CPU / 8Gi,  min 100m / 128Mi
+│
+└── Deployment     finetune-api  (replicas: 2)
+        │
+        │  creates & manages ▼
+        │
+        ReplicaSet  finetune-api-7f9b4c6d8  (desired: 2, current: 2)
+            │
+            │  creates & manages ▼
+            │
+            ├── Pod  finetune-api-7f9b4c6d8-xk2j4
+            │     └── Container  finetune-api
+            │           image: llmplatform-dev/finetune-api:dev-latest
+            │           requests: 500m CPU / 1Gi memory
+            │           limits:   2 CPU   / 4Gi memory
+            │           ports: 8000
+            │
+            └── Pod  finetune-api-7f9b4c6d8-m9p3r
+                  └── Container  finetune-api
+                        image: llmplatform-dev/finetune-api:dev-latest
+                        requests: 500m CPU / 1Gi memory
+                        limits:   2 CPU   / 4Gi memory
+                        ports: 8000
+```
+
+### What Each Layer Does
+
+| Layer             | Object                         | Who Creates It            | What It Does                                                                                                                                                          |
+| ----------------- | ------------------------------ | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1. Deployment** | `finetune-api`                 | You (`kubectl apply`)     | Declares the _desired state_: 2 replicas of the finetune-api container image. Manages rollouts, rollbacks, and ReplicaSet history.                                    |
+| **2. ReplicaSet** | `finetune-api-7f9b4c6d8`       | The Deployment controller | Ensures exactly 2 Pods exist at all times. If a Pod dies, the ReplicaSet creates a replacement. You never create ReplicaSets directly.                                |
+| **3. Pod**        | `finetune-api-7f9b4c6d8-xk2j4` | The ReplicaSet controller | The smallest schedulable unit. Gets assigned to a Node by the scheduler. Each Pod has its own IP address.                                                             |
+| **4. Container**  | `finetune-api`                 | The kubelet on the Node   | The actual running process (`finetune-api:dev-latest`). Runs inside the Pod's network/storage namespace. The container is what actually serves requests on port 8000. |
+
+### How ResourceQuota and LimitRange Govern the Chain
+
+```
+                    ┌─────────────────────────────────────────────────────┐
+                    │           ResourceQuota: finetune-quota             │
+                    │                                                     │
+                    │  Namespace-wide budget (all pods combined):         │
+                    │    requests:  8 CPU  / 16Gi memory                  │
+                    │    limits:   16 CPU  / 32Gi memory                  │
+                    │    max pods: 15                                      │
+                    │                                                     │
+                    │  finetune-api (2 pods) consumes:                    │
+                    │    requests:  1 CPU  /  2Gi  (500m × 2, 1Gi × 2)   │
+                    │    limits:    4 CPU  /  8Gi  (2 × 2, 4Gi × 2)      │
+                    │    pods:     2 of 15                                 │
+                    │                                                     │
+                    │  Remaining budget for other finetune workloads:     │
+                    │    requests:  7 CPU  / 14Gi                         │
+                    │    limits:   12 CPU  / 24Gi                         │
+                    │    pods:     13                                      │
+                    └─────────────────────────────────────────────────────┘
+
+                    ┌─────────────────────────────────────────────────────┐
+                    │           LimitRange: finetune-limits               │
+                    │                                                     │
+                    │  Per-container guardrails:                          │
+                    │    default:  1 CPU  / 2Gi   ← applied if omitted   │
+                    │    max:      4 CPU  / 8Gi   ← hard ceiling         │
+                    │    min:    100m     / 128Mi  ← hard floor           │
+                    │                                                     │
+                    │  finetune-api sets explicit values:                 │
+                    │    requests: 500m / 1Gi   ✓ (≥ min 100m/128Mi)     │
+                    │    limits:     2  / 4Gi   ✓ (≤ max 4 CPU/8Gi)      │
+                    └─────────────────────────────────────────────────────┘
+```
+
+### Rejection Scenarios
+
+| Scenario                              | What Happens                       | Why                                             |
+| ------------------------------------- | ---------------------------------- | ----------------------------------------------- |
+| Deploy a 3rd service requesting 8 CPU | **Rejected** by ResourceQuota      | Total namespace requests would exceed 8 CPU cap |
+| Container requests 50m CPU            | **Rejected** by LimitRange         | Below the 100m minimum                          |
+| Container sets limit of 6 CPU         | **Rejected** by LimitRange         | Exceeds the 4 CPU per-container max             |
+| Container omits resource requests     | **Defaults applied** by LimitRange | Gets 1 CPU / 2Gi automatically                  |
+| 16th pod created in namespace         | **Rejected** by ResourceQuota      | Exceeds the 15-pod maximum                      |
+
 ## Complete Kubernetes Resource Inventory
 
 Every resource deployed by the K8s manifests, organized by the Kubernetes object hierarchy and how each connects to the LLM Optimization Platform.

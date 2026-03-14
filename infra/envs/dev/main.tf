@@ -14,6 +14,10 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = "~> 0.9"
+    }
   }
 }
 
@@ -219,6 +223,13 @@ resource "aws_iam_role_policy" "sagemaker_execution" {
   })
 }
 
+# Wait for IAM role to propagate before SageMaker tries to assume it
+resource "time_sleep" "iam_propagation" {
+  create_duration = "15s"
+
+  depends_on = [aws_iam_role_policy.sagemaker_execution]
+}
+
 # SageMaker Endpoints (one per team)
 module "sagemaker_endpoints" {
   source = "../../modules/sagemaker_endpoints"
@@ -255,7 +266,7 @@ module "sagemaker_endpoints" {
 
   tags = local.tags
 
-  depends_on = [aws_iam_role_policy.sagemaker_execution]
+  depends_on = [time_sleep.iam_propagation]
 }
 
 locals {
