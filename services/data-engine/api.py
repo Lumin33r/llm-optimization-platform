@@ -8,6 +8,43 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+# ── OTEL SDK setup (must run before harness import) ──────────────────
+try:
+    from opentelemetry import metrics, trace
+    from opentelemetry.sdk.metrics import MeterProvider
+    from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.sdk.resources import Resource
+    from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
+    _otel_endpoint = os.getenv(
+        "OTEL_EXPORTER_OTLP_ENDPOINT",
+        "http://otel-collector.observability.svc.cluster.local:4317",
+    )
+    _resource = Resource.create({
+        "service.name": os.getenv("OTEL_SERVICE_NAME", "data-engine"),
+        "service.version": os.getenv("SERVICE_VERSION", "1.0.0"),
+    })
+
+    # Metrics
+    _metric_reader = PeriodicExportingMetricReader(
+        OTLPMetricExporter(endpoint=_otel_endpoint, insecure=True),
+        export_interval_millis=15_000,
+    )
+    metrics.set_meter_provider(MeterProvider(resource=_resource, metric_readers=[_metric_reader]))
+
+    # Traces
+    _tracer_provider = TracerProvider(resource=_resource)
+    _tracer_provider.add_span_processor(
+        BatchSpanProcessor(OTLPSpanExporter(endpoint=_otel_endpoint, insecure=True))
+    )
+    trace.set_tracer_provider(_tracer_provider)
+except ImportError:
+    pass  # OTEL packages not installed — harness falls back to no-ops
+# ─────────────────────────────────────────────────────────────────────
+
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 

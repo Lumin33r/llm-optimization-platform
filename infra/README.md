@@ -117,6 +117,90 @@ How each Terraform module maps to the LLM Optimization Platform architecture.
 | **observability** (5 resources)                            | CloudWatch log group for EKS, ALB Ingress Controller IRSA role + policy, External Secrets Operator IRSA role + policy                                                                               | The monitoring and ingress plumbing — centralizes cluster logs in CloudWatch, enables the ALB controller to provision load balancers that route traffic to the Gateway, and allows the External Secrets Operator to pull secrets from AWS Secrets Manager into Kubernetes.                                                                                                         |
 | **sagemaker_endpoints** (11 resources: 2 IAM + 9 per-team) | SageMaker execution IAM role + policy and 3 teams × (model + endpoint config + endpoint) on ml.g5.xlarge with HuggingFace TGI container                                                             | The ML inference layer — hosts Mistral-7B-AWQ behind SageMaker endpoints (`llmplatform-dev-{quant,finetune,eval}-endpoint`) that the platform's team APIs invoke via IRSA. Each team gets its own model + endpoint config + endpoint, provisioned by Terraform and referenced in K8s ConfigMaps via `SAGEMAKER_ENDPOINT_NAME`.                                                     |
 
+## OIDC — How Identity Works Without Passwords
+
+**OpenID Connect (OIDC)** is an identity layer built on top of OAuth 2.0 that lets one service prove "who" is making a request without sharing passwords. Instead of passing credentials around, an **identity provider (IdP)** issues a signed **JWT token** that says "this entity is X, and I vouch for it." The receiving service validates the token's signature against the IdP's public keys — no shared secret needed.
+
+### How OIDC works in 4 steps
+
+| Step                  | What Happens                                                                                                      |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **1. Discovery**      | The relying party fetches `/.well-known/openid-configuration` from the IdP to learn its endpoints and public keys |
+| **2. Authentication** | The entity authenticates with the IdP (login, service account, etc.)                                              |
+| **3. Token issuance** | The IdP returns a signed JWT with claims (`sub`, `iss`, `aud`, `exp`, etc.)                                       |
+| **4. Verification**   | The receiving service validates the JWT signature using the IdP's published JWKS (JSON Web Key Set)               |
+
+### OIDC in this platform
+
+The platform uses **two** OIDC providers:
+
+| Provider        | IdP                                                                                 | Entity                                            | Relying Party | Purpose                                                                     |
+| --------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------- | ------------- | --------------------------------------------------------------------------- |
+| **EKS OIDC**    | EKS cluster (`aws_iam_openid_connect_provider.eks` in `modules/eks/main.tf`)        | Kubernetes ServiceAccounts (e.g., `quant-api-sa`) | AWS STS       | Lets pods assume IAM roles via IRSA                                         |
+| **GitHub OIDC** | GitHub Actions (`aws_iam_openid_connect_provider.github` in `modules/github_oidc/`) | GitHub workflow runs                              | AWS STS       | Lets CI/CD assume an IAM role for ECR push, EKS deploy, and Terraform state |
+
+## IRSA — How Pods Get AWS Credentials
+
+**IRSA (IAM Roles for Service Accounts)** uses the EKS OIDC provider to give each pod scoped, short-lived AWS credentials — no access keys stored anywhere.
+
+### End-to-end flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  1. Pod starts                                                          │
+│     └─► kubelet mounts a projected OIDC JWT token into the pod at:      │
+│         /var/run/secrets/eks.amazonaws.com/serviceaccount/token          │
+│                                                                         │
+│  2. AWS SDK (boto3) auto-discovers the projected token                  │
+│     └─► Reads AWS_WEB_IDENTITY_TOKEN_FILE env var (set by EKS)          │
+│                                                                         │
+│  3. boto3 calls sts:AssumeRoleWithWebIdentity                           │
+│     └─► Sends the JWT + IAM role ARN to AWS STS                         │
+│                                                                         │
+│  4. STS validates the JWT                                               │
+│     └─► Fetches the EKS OIDC provider's JWKS public keys               │
+│     └─► Verifies the token signature, expiry, audience (sts.amazonaws.  │
+│         com), and subject (system:serviceaccount:<ns>:<sa>)              │
+│                                                                         │
+│  5. STS returns temporary credentials                                   │
+│     └─► Access Key + Secret Key + Session Token (valid ~1 hour)         │
+│                                                                         │
+│  6. Pod uses AWS services with scoped permissions                       │
+│     └─► e.g., quant-api calls sagemaker:InvokeEndpoint on              │
+│         llmplatform-dev-quant-endpoint                                  │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### How the trust chain connects
+
+```
+EKS Cluster                          AWS IAM
+───────────                          ───────
+OIDC Provider  ◄──── trusts ────►  IAM Role trust policy
+  (issues JWTs)                      (Federated: oidc.eks...amazonaws.com)
+       │                                     │
+       ▼                                     ▼
+ServiceAccount                         Inline Policies
+  (annotated with                        (sagemaker:InvokeEndpoint,
+   eks.amazonaws.com/role-arn)            cloudwatch:PutMetricData, ...)
+       │
+       ▼
+Pod (receives projected JWT)
+       │
+       ▼
+boto3 → AssumeRoleWithWebIdentity → temporary AWS creds
+```
+
+### Where this is configured in the platform
+
+| Layer            | File                                   | What It Does                                                                                                                                                                  |
+| ---------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OIDC Provider    | `infra/modules/eks/main.tf`            | Creates `aws_iam_openid_connect_provider` from the EKS cluster's identity issuer URL with `client_id_list = ["sts.amazonaws.com"]`                                            |
+| IAM Role + Trust | `infra/modules/iam_irsa/main.tf`       | Creates IAM role with `sts:AssumeRoleWithWebIdentity` trust policy; `StringEquals` conditions match `sub` (`system:serviceaccount:<ns>:<sa>`) and `aud` (`sts.amazonaws.com`) |
+| Scoped Policies  | `infra/modules/iam_irsa/main.tf`       | Attaches inline policies — SageMaker invoke on `arn:aws:sagemaker:*:*:endpoint/llmplatform-dev-{team}-*` and CloudWatch metrics/logs                                          |
+| ServiceAccount   | `infra/modules/k8s_namespaces/main.tf` | Creates K8s ServiceAccounts annotated with `eks.amazonaws.com/role-arn: <iam_role_arn>`                                                                                       |
+| Pod Binding      | `k8s/base/*/deployment.yaml`           | Deployments reference `serviceAccountName` — kubelet auto-injects the projected token volume                                                                                  |
+
 ## Infrastructure Diagram
 
 ```mermaid

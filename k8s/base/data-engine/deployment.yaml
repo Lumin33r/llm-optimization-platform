@@ -30,6 +30,10 @@ spec:
               value: "/app/data/promptsets"
             - name: SERVICE_VERSION
               value: "1.0.0"
+            - name: OTEL_SERVICE_NAME
+              value: "data-engine"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector.observability.svc.cluster.local:4317"
           resources:
             requests:
               cpu: 100m
