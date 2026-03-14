@@ -2,7 +2,10 @@
 
 from enum import Enum
 import asyncio
+import logging
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 class ServiceState(Enum):
@@ -42,7 +45,10 @@ class HealthChecker:
                     self.state = ServiceState.READY
                     self.sagemaker_reachable = True
                     return True
-            except Exception:
+                else:
+                    logger.warning("Startup check: endpoint not yet InService")
+            except Exception as exc:
+                logger.error("Startup check failed: %s: %s", type(exc).__name__, exc)
                 return False
         return self.state != ServiceState.STARTING
 
