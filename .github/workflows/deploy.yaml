@@ -312,9 +312,41 @@ jobs:
           kubectl rollout restart deployment/quant-api -n quant
           kubectl rollout restart deployment/finetune-api -n finetune
           kubectl rollout restart deployment/eval-api -n eval
-          kubectl rollout status deployment/quant-api -n quant --timeout=600s
-          kubectl rollout status deployment/finetune-api -n finetune --timeout=600s
-          kubectl rollout status deployment/eval-api -n eval --timeout=600s
+
+          TEAM_FAILED=""
+          for svc_ns in quant-api:quant finetune-api:finetune eval-api:eval; do
+            SVC="${svc_ns%%:*}"
+            NS="${svc_ns##*:}"
+            echo "  Waiting for $SVC in $NS..."
+            if ! kubectl rollout status deployment/$SVC -n $NS --timeout=600s; then
+              echo "::error::$SVC rollout failed"
+              TEAM_FAILED="$TEAM_FAILED $SVC"
+            fi
+          done
+
+          if [ -n "$TEAM_FAILED" ]; then
+            echo ""
+            echo "::error::Failed team services:$TEAM_FAILED"
+            echo "=== Diagnostics for failed services ==="
+            for svc_ns in quant-api:quant finetune-api:finetune eval-api:eval; do
+              SVC="${svc_ns%%:*}"
+              NS="${svc_ns##*:}"
+              echo ""
+              echo "--- $SVC ($NS) ---"
+              echo "Pod status:"
+              kubectl get pods -n $NS -l app=$SVC -o wide 2>/dev/null || true
+              echo ""
+              echo "Recent events:"
+              kubectl get events -n $NS --sort-by='.lastTimestamp' --field-selector involvedObject.kind=Pod 2>/dev/null | tail -20 || true
+              echo ""
+              echo "Container logs (last 40 lines):"
+              kubectl logs -n $NS -l app=$SVC --tail=40 --all-containers 2>/dev/null || true
+              echo ""
+              echo "Previous container logs (if crashed):"
+              kubectl logs -n $NS -l app=$SVC --tail=40 --previous --all-containers 2>/dev/null || true
+            done
+            exit 1
+          fi
 
       # NOTE: Gateway URL patching is no longer needed. The Grafana pod runs an
       # nginx reverse proxy sidecar that proxies /gateway-proxy/ to the gateway's
