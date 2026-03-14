@@ -27,30 +27,27 @@ class HealthChecker:
     async def startup_check(self) -> bool:
         """
         Check if service startup is complete.
-        Returns True when:
-        - Configuration loaded
-        - SageMaker endpoint is reachable (if configured)
-        - All dependencies initialized
+        Returns True when the application process is running and routes are
+        registered.  External dependencies (SageMaker) are verified by the
+        readiness probe instead, so pods can start and emit logs even when
+        SageMaker is temporarily unreachable.
         """
         if self.state == ServiceState.STARTING:
-            # If no SageMaker client, go straight to READY (dev/local mode)
-            if self.sagemaker_client is None:
-                self.state = ServiceState.READY
-                return True
+            self.state = ServiceState.READY
 
-            # Verify SageMaker endpoint exists and is InService
-            try:
-                endpoint_ok = await self.sagemaker_client.check_endpoint_status()
-                if endpoint_ok:
-                    self.state = ServiceState.READY
-                    self.sagemaker_reachable = True
-                    return True
-                else:
-                    logger.warning("Startup check: endpoint not yet InService")
-            except Exception as exc:
-                logger.error("Startup check failed: %s: %s", type(exc).__name__, exc)
-                return False
-        return self.state != ServiceState.STARTING
+            # Log SageMaker status on first startup check (non-blocking)
+            if self.sagemaker_client is not None:
+                try:
+                    endpoint_ok = await self.sagemaker_client.check_endpoint_status()
+                    self.sagemaker_reachable = endpoint_ok
+                    if endpoint_ok:
+                        logger.info("Startup: SageMaker endpoint is InService")
+                    else:
+                        logger.warning("Startup: SageMaker endpoint not yet InService — readiness probe will gate traffic")
+                except Exception as exc:
+                    logger.error("Startup: SageMaker check failed: %s: %s — readiness probe will gate traffic", type(exc).__name__, exc)
+
+        return True
 
     async def readiness_check(self) -> bool:
         """
