@@ -35,7 +35,10 @@ class SageMakerClient:
             region_name=os.getenv('AWS_REGION', 'us-west-2'),
             config=config
         )
-        self.sagemaker = boto3.client('sagemaker')
+        self.sagemaker = boto3.client(
+            'sagemaker',
+            region_name=os.getenv('AWS_REGION', 'us-west-2'),
+        )
         self.tracer = trace.get_tracer(__name__)
 
     async def check_endpoint_status(self) -> bool:
