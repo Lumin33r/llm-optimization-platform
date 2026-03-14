@@ -93,7 +93,7 @@ module "irsa_quant" {
   oidc_provider_arn       = module.eks.oidc_provider_arn
   oidc_provider_url       = module.eks.oidc_provider_url
   enable_sagemaker_invoke = true
-  sagemaker_endpoint_arns = ["arn:aws:sagemaker:${var.aws_region}:*:endpoint/quant-*"]
+  sagemaker_endpoint_arns = ["arn:aws:sagemaker:${var.aws_region}:*:endpoint/${var.project}-${var.environment}-quant-*"]
   enable_cloudwatch       = true
   tags                    = local.tags
 }
@@ -109,7 +109,7 @@ module "irsa_finetune" {
   oidc_provider_arn       = module.eks.oidc_provider_arn
   oidc_provider_url       = module.eks.oidc_provider_url
   enable_sagemaker_invoke = true
-  sagemaker_endpoint_arns = ["arn:aws:sagemaker:${var.aws_region}:*:endpoint/finetune-*"]
+  sagemaker_endpoint_arns = ["arn:aws:sagemaker:${var.aws_region}:*:endpoint/${var.project}-${var.environment}-finetune-*"]
   enable_cloudwatch       = true
   tags                    = local.tags
 }
@@ -125,7 +125,7 @@ module "irsa_eval" {
   oidc_provider_arn       = module.eks.oidc_provider_arn
   oidc_provider_url       = module.eks.oidc_provider_url
   enable_sagemaker_invoke = true
-  sagemaker_endpoint_arns = ["arn:aws:sagemaker:${var.aws_region}:*:endpoint/eval-*"]
+  sagemaker_endpoint_arns = ["arn:aws:sagemaker:${var.aws_region}:*:endpoint/${var.project}-${var.environment}-eval-*"]
   enable_cloudwatch       = true
   tags                    = local.tags
 }
