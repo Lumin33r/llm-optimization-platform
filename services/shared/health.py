@@ -52,26 +52,30 @@ class HealthChecker:
     async def readiness_check(self) -> bool:
         """
         Check if service is ready to handle traffic.
-        Returns True when:
-        - Startup complete
-        - SageMaker endpoint InService (if configured)
-        - No circuit breaker open
+        Returns True when the application is up and responsive.
+        SageMaker reachability is tracked for observability but does not
+        gate readiness — the /predict endpoint handles SageMaker errors
+        gracefully and the ops dashboard shows endpoint health independently.
         """
         if self.state in (ServiceState.STARTING, ServiceState.UNHEALTHY):
             return False
 
-        # If no SageMaker client, just check state
-        if self.sagemaker_client is None:
-            return self.state == ServiceState.READY
+        # Periodic SageMaker health check (non-blocking for readiness)
+        if self.sagemaker_client is not None:
+            import time
+            now = time.time()
+            if self.last_sagemaker_check is None or (now - self.last_sagemaker_check) > 30:
+                try:
+                    self.sagemaker_reachable = await self.sagemaker_client.check_endpoint_status()
+                except Exception as exc:
+                    logger.warning("Readiness: SageMaker check failed: %s: %s", type(exc).__name__, exc)
+                    self.sagemaker_reachable = False
+                self.last_sagemaker_check = now
 
-        # Periodic SageMaker health verification
-        import time
-        now = time.time()
-        if self.last_sagemaker_check is None or (now - self.last_sagemaker_check) > 30:
-            self.sagemaker_reachable = await self.sagemaker_client.check_endpoint_status()
-            self.last_sagemaker_check = now
+                if not self.sagemaker_reachable:
+                    logger.warning("Readiness: SageMaker not reachable — pod is ready but predictions may fail")
 
-        return self.sagemaker_reachable and self.state == ServiceState.READY
+        return self.state == ServiceState.READY
 
     async def liveness_check(self) -> bool:
         """
