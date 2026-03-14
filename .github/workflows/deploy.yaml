@@ -312,9 +312,9 @@ jobs:
           kubectl rollout restart deployment/quant-api -n quant
           kubectl rollout restart deployment/finetune-api -n finetune
           kubectl rollout restart deployment/eval-api -n eval
-          kubectl rollout status deployment/quant-api -n quant --timeout=300s
-          kubectl rollout status deployment/finetune-api -n finetune --timeout=300s
-          kubectl rollout status deployment/eval-api -n eval --timeout=300s
+          kubectl rollout status deployment/quant-api -n quant --timeout=600s
+          kubectl rollout status deployment/finetune-api -n finetune --timeout=600s
+          kubectl rollout status deployment/eval-api -n eval --timeout=600s
 
       # NOTE: Gateway URL patching is no longer needed. The Grafana pod runs an
       # nginx reverse proxy sidecar that proxies /gateway-proxy/ to the gateway's
