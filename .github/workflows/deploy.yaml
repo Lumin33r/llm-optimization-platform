@@ -308,6 +308,19 @@ jobs:
           fi
 
           echo "=== Waiting for API services (depend on LLM models) ==="
+          # Clean up stale failed rollouts from previous attempts — orphan
+          # Pending pods from old ReplicaSets consume quota and block scheduling.
+          for svc_ns in quant-api:quant finetune-api:finetune eval-api:eval; do
+            SVC="${svc_ns%%:*}"
+            NS="${svc_ns##*:}"
+            # Delete Pending pods from old ReplicaSets
+            PENDING=$(kubectl get pods -n $NS -l app=$SVC --field-selector=status.phase=Pending -o name 2>/dev/null || true)
+            if [ -n "$PENDING" ]; then
+              echo "  Cleaning up Pending pods in $NS: $PENDING"
+              echo "$PENDING" | xargs kubectl delete -n $NS --grace-period=0 --force 2>/dev/null || true
+            fi
+          done
+
           # Restart deployments to clear stale ProgressDeadlineExceeded state
           kubectl rollout restart deployment/quant-api -n quant
           kubectl rollout restart deployment/finetune-api -n finetune

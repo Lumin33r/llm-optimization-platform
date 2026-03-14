@@ -1,0 +1,60 @@
+# Dev: reduce team APIs to 1 replica with lower resources.
+# Non-GPU nodes (t3.medium) have limited capacity — running 2 replicas
+# per team API (6 pods total) exhausts the cluster and blocks rolling updates.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quant-api
+  namespace: quant
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: quant-api
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finetune-api
+  namespace: finetune
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: finetune-api
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eval-api
+  namespace: eval
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: eval-api
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi

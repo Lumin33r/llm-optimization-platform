@@ -25,6 +25,7 @@ images:
 patches:
   - path: patches/gateway-replicas.yaml
   - path: patches/resource-limits.yaml
+  - path: patches/team-api-dev.yaml
   - patch: |
       apiVersion: v1
       kind: ConfigMap
