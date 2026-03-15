@@ -276,6 +276,16 @@ jobs:
         run: |
           kubectl apply -f k8s/base/data-engine/
 
+      - name: Restart deployments to pick up new images
+        run: |
+          # Image tag is always dev-latest, so kubectl apply won't trigger
+          # a rollout when only the image contents changed. Force restart.
+          kubectl rollout restart deployment/gateway -n platform
+          kubectl rollout restart deployment/data-engine -n platform
+          for team in quant finetune eval; do
+            kubectl rollout restart deployment/${team}-api -n ${team}
+          done
+
       - name: Deploy LLM baseline (vLLM)
         run: |
           kubectl apply -k k8s/base/llm-baseline/

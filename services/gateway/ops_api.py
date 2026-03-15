@@ -250,19 +250,15 @@ async def get_stats():
     window_start = now - timedelta(hours=24)
 
     # --- Fire all PromQL queries in parallel ---
-    # NOTE: We use raw cumulative counters (sum(...)) instead of increase(...)
-    # because the OTEL-to-Prometheus remote-write pipeline batch-inserts data
-    # points, which causes increase() to undercount due to counter-reset detection.
-    #
-    # Metric sources:
-    #   - lab_gateway_requests_total  → gateway (OTEL counter)
-    #   - lab_service_requests_total  → team APIs (OTEL counter, captures benchmark traffic)
-    #   - lab_gateway_request_duration_ms → gateway latency (OTEL histogram)
-    # OTEL → Prometheus remote-write preserves the metric names with _total suffix
-    # on counters and _bucket suffix on histograms.
+    # Metric sources (from data-engine harness, exported via OTEL → Prometheus):
+    #   lab_harness_requests_total  — total prompts sent per team/scenario
+    #   lab_harness_pass_total      — successful predictions
+    #   lab_harness_fail_total      — failed predictions
+    #   lab_harness_latency_ms_*    — per-request latency histogram
+    # Labels: team, scenario_id, bucket, job
     (
         total_res,
-        err_rate_res,
+        fail_res,
         p50_res,
         p95_res,
         p99_res,
@@ -270,34 +266,34 @@ async def get_stats():
         err_by_team_res,
     ) = await asyncio.gather(
         _prom_query(
-            'sum(lab_gateway_requests_total or lab_service_requests_total)'
+            'sum(lab_harness_requests_total)'
         ),
         _prom_query(
-            '(sum(lab_gateway_requests_total{status!="success"}) or vector(0))'
-            ' / (sum(lab_gateway_requests_total) or vector(1)) * 100'
+            'sum(lab_harness_fail_total)'
         ),
         _prom_query(
-            'histogram_quantile(0.50, sum(rate(lab_gateway_request_duration_ms_bucket[5m])) by (le))'
+            'histogram_quantile(0.50, sum by (le) (lab_harness_latency_ms_bucket))'
         ),
         _prom_query(
-            'histogram_quantile(0.95, sum(rate(lab_gateway_request_duration_ms_bucket[5m])) by (le))'
+            'histogram_quantile(0.95, sum by (le) (lab_harness_latency_ms_bucket))'
         ),
         _prom_query(
-            'histogram_quantile(0.99, sum(rate(lab_gateway_request_duration_ms_bucket[5m])) by (le))'
+            'histogram_quantile(0.99, sum by (le) (lab_harness_latency_ms_bucket))'
         ),
         _prom_query(
-            'sum by (team) (lab_gateway_requests_total)'
-            ' or sum by (team) (lab_service_requests_total)'
+            'sum by (team) (lab_harness_requests_total)'
         ),
         _prom_query(
-            'sum by (team) (lab_gateway_requests_total{status!="success"})'
-            ' or sum by (team) (lab_service_requests_total{status!="success"})'
+            'sum by (team) (lab_harness_fail_total)'
         ),
     )
 
     # --- Parse scalar results ---
     total_requests = int(_scalar(total_res))
-    error_rate = round(_scalar(err_rate_res), 2)
+    total_failures = int(_scalar(fail_res))
+    error_rate = round(
+        (total_failures / total_requests * 100) if total_requests > 0 else 0.0, 2
+    )
     p50 = round(_scalar(p50_res), 1)
     p95 = round(_scalar(p95_res), 1)
     p99 = round(_scalar(p99_res), 1)
