@@ -214,6 +214,13 @@ async def get_stats():
     # NOTE: We use raw cumulative counters (sum(...)) instead of increase(...)
     # because the OTEL-to-Prometheus remote-write pipeline batch-inserts data
     # points, which causes increase() to undercount due to counter-reset detection.
+    #
+    # Metric sources:
+    #   - lab_gateway_requests_total  → gateway (OTEL counter)
+    #   - lab_service_requests_total  → team APIs (OTEL counter, captures benchmark traffic)
+    #   - lab_gateway_request_duration_ms → gateway latency (OTEL histogram)
+    # OTEL → Prometheus remote-write preserves the metric names with _total suffix
+    # on counters and _bucket suffix on histograms.
     (
         total_res,
         err_rate_res,
@@ -223,23 +230,29 @@ async def get_stats():
         req_by_team_res,
         err_by_team_res,
     ) = await asyncio.gather(
-        _prom_query('sum(gateway_requests_total)'),
         _prom_query(
-            'sum(gateway_requests_total{status!="success"})'
-            ' / sum(gateway_requests_total) * 100'
+            'sum(lab_gateway_requests_total or lab_service_requests_total)'
         ),
         _prom_query(
-            'histogram_quantile(0.50, sum(rate(gateway_latency_ms_bucket[5m])) by (le))'
+            '(sum(lab_gateway_requests_total{status!="success"}) or vector(0))'
+            ' / (sum(lab_gateway_requests_total) or vector(1)) * 100'
         ),
         _prom_query(
-            'histogram_quantile(0.95, sum(rate(gateway_latency_ms_bucket[5m])) by (le))'
+            'histogram_quantile(0.50, sum(rate(lab_gateway_request_duration_ms_bucket[5m])) by (le))'
         ),
         _prom_query(
-            'histogram_quantile(0.99, sum(rate(gateway_latency_ms_bucket[5m])) by (le))'
+            'histogram_quantile(0.95, sum(rate(lab_gateway_request_duration_ms_bucket[5m])) by (le))'
         ),
-        _prom_query('sum by (team) (gateway_requests_total)'),
         _prom_query(
-            'sum by (team) (gateway_requests_total{status!="success"})'
+            'histogram_quantile(0.99, sum(rate(lab_gateway_request_duration_ms_bucket[5m])) by (le))'
+        ),
+        _prom_query(
+            'sum by (team) (lab_gateway_requests_total)'
+            ' or sum by (team) (lab_service_requests_total)'
+        ),
+        _prom_query(
+            'sum by (team) (lab_gateway_requests_total{status!="success"})'
+            ' or sum by (team) (lab_service_requests_total{status!="success"})'
         ),
     )
 
