@@ -102,6 +102,12 @@ class SageMakerClient:
                 )
 
                 result = json.loads(response['Body'].read().decode())
+
+                # HuggingFace TGI returns a list: [{"generated_text": "..."}]
+                # Unwrap to a single dict for consistent downstream handling.
+                if isinstance(result, list) and len(result) > 0:
+                    result = result[0]
+
                 span.set_attribute("sagemaker.success", True)
                 return result
 
