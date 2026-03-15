@@ -50,6 +50,28 @@ def _scalar(results: list, default: float = 0.0) -> float:
     return default
 
 
+@router.get("/debug/metrics")
+async def debug_metrics():
+    """List all metric names in Prometheus (debug helper)."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"{PROMETHEUS_URL}/api/v1/label/__name__/values")
+            data = resp.json()
+            if data.get("status") == "success":
+                all_names = data["data"]
+                relevant = [n for n in all_names if any(
+                    k in n for k in ("lab_", "gateway", "service_request", "genai")
+                )]
+                return {
+                    "total_metrics": len(all_names),
+                    "relevant_metrics": relevant,
+                    "prometheus_url": PROMETHEUS_URL,
+                }
+            return {"error": "query failed", "data": data}
+    except Exception as exc:
+        return {"error": str(exc), "prometheus_url": PROMETHEUS_URL}
+
+
 # Response Models
 class ServiceInfo(BaseModel):
     """Information about a registered service."""
